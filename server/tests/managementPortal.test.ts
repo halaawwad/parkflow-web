@@ -94,4 +94,18 @@ describe('selective management portal integration', () => {
     expect((await request(app).patch(`/api/v1/admin/users/${owner.user.id}`).set(headers(admin)).send({role:'USER'})).status).toBe(200);
     expect((await request(app).get('/api/v1/admin/parking-zones').set(headers(owner))).status).toBe(401);
   });
+  it('rejects decisions on paid or already closed appeals and returns review details', async () => {
+    const vehicle=await db.vehicle.create({data:{plateNumber:'PORTAL-TEST'}});
+    const violation=await db.violation.create({data:{vehicleId:vehicle.id,plateNumber:vehicle.plateNumber,type:'expired_parking',amount:500,status:'paid',locationName:'Lot',locationNameAr:'موقف',latitude:31.9,longitude:35.2,dueAt:new Date(Date.now()+86400000),reason:'Overstay',reasonAr:'تجاوز المدة',issuingAuthority:'Test',issuingAuthorityAr:'اختبار'}});
+    const appeal=await db.appeal.create({data:{userId:driver.user.id,violationId:violation.id,reason:'other',notes:'Please review'}});
+    const list=await request(app).get('/api/v1/admin/appeals').set(headers(admin));
+    expect(list.body[0]).toMatchObject({id:appeal.id,user:{email:driver.user.email},violation:{plateNumber:vehicle.plateNumber,status:'paid'}});
+    const path=`/api/v1/admin/appeals/${appeal.id}`;
+    expect((await request(app).patch(path).set(headers(admin)).send({status:'approved',decisionNote:'Test decision'})).status).toBe(409);
+    await db.violation.update({where:{id:violation.id},data:{status:'unpaid'}});
+    await db.appeal.update({where:{id:appeal.id},data:{status:'approved'}});
+    expect((await request(app).patch(path).set(headers(admin)).send({status:'rejected',decisionNote:'Second decision'})).status).toBe(409);
+    expect((await db.violation.findUniqueOrThrow({where:{id:violation.id}})).status).toBe('unpaid');
+  });
+
 });
