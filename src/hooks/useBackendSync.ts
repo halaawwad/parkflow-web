@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { io } from 'socket.io-client';
 import { useAuthStore } from '@/store/authStore';
 import { usePreferencesStore } from '@/store/preferencesStore';
-import { API_BASE_URL,api,refreshSession } from '@/services/http/apiClient';
+import { API_BASE_URL,api,refreshSession,sessionRefreshDelay } from '@/services/http/apiClient';
 import { useInAppNotificationStore } from '@/store/inAppNotificationStore';
 import type { AppNotification } from '@/types';
 export function useBackendSync(){
@@ -14,8 +14,8 @@ export function useBackendSync(){
  const socket=io(API_BASE_URL.replace(/\/api\/v1$/,''),{auth:{token:session.accessToken},transports:['websocket'],reconnection:true});
  const invalidate=(keys:string[])=>{for(const key of keys)void client.invalidateQueries({queryKey:[key]});};
  socket.on('checkpoint.updated',()=>invalidate(['roads','route']));socket.on('parking.availability.updated',()=>invalidate(['zones','zone']));socket.on('parking.session.updated',()=>invalidate(['sessions','session','wallet','transactions','trust']));socket.on('notification.created',(notification?:AppNotification)=>{invalidate(['notifications','wallet','transactions','violations','trust']);useInAppNotificationStore.getState().show(notification);});socket.on('trust.updated',()=>invalidate(['trust']));socket.on('connect',()=>void client.invalidateQueries());
- socket.on('connect_error',()=>{if(useAuthStore.getState().session&&Date.parse(session.expiresAt)<=Date.now()+30000)void refreshSession().catch(()=>undefined);});
- const timer=setTimeout(()=>{void refreshSession().catch(()=>undefined);},Math.max(1000,Date.parse(session.expiresAt)-Date.now()-30000));
+ socket.on('connect_error',()=>{if(useAuthStore.getState().session&&sessionRefreshDelay(session)<=0)void refreshSession().catch(()=>undefined);});
+ const timer=setTimeout(()=>{void refreshSession().catch(()=>undefined);},Math.max(1000,sessionRefreshDelay(session)));
  const subscription=AppState.addEventListener('change',state=>{if(state==='active'){void client.invalidateQueries();if(!socket.connected)socket.connect();}});
  return()=>{clearTimeout(timer);subscription.remove();socket.disconnect();};
  },[session?.accessToken,client]);

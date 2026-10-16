@@ -21,6 +21,7 @@ import { usePreferencesStore } from '@/store/preferencesStore';
 import { isAppError } from '@/utils/errors';
 import { WebAppShell } from '@/components/layout/WebAppShell';
 import { NotificationBanner } from '@/components/navigation/NotificationBanner';
+import { BackendConnectionNotice } from '@/components/navigation/BackendConnectionNotice';
 import { CrashCountdown } from '@/components/navigation/CrashCountdown';
 import { useCrashDetection } from '@/hooks/useCrashDetection';
 
@@ -147,6 +148,7 @@ function AppShell() {
     <WebAppShell>
       {ready ? <RootNavigator /> : <View style={{ flex: 1, backgroundColor: colors.deep }} />}
       {ready ? <NotificationBanner /> : null}
+      <BackendConnectionNotice />
       {ready ? <CrashCountdown /> : null}
     </WebAppShell>
   );

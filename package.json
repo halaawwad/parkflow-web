@@ -8,7 +8,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test:notifications": "vitest run --config vitest.notifications.config.ts"
+    "test:notifications": "vitest run --config vitest.notifications.config.ts",
+    "test:network": "vitest run --config vitest.network.config.ts"
   },
   "private": true,
   "dependencies": {

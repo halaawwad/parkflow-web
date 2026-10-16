@@ -23,6 +23,8 @@ export interface AuthSession {
   accessToken: string;
   refreshToken: string;
   expiresAt: ISODateString;
+  /** Server-issued absolute deadline from the original OTP login; refresh never extends it. */
+  rememberedUntil?: ISODateString;
 }
 
 export interface OtpChallenge {

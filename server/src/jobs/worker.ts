@@ -4,6 +4,7 @@ import { db,atomic } from '../database/client';
 import { redis,redisConnection } from '../database/redis';
 import { attachSockets } from '../realtime/socket';
 import { maintenanceQueue,pushQueue } from './queues';
+import { startRedisMemoryMonitor } from './redisMemory';
 import { expireSessions } from '../modules/sessions/service';
 import { checkOverstays } from '../modules/gates/service';
 import { verifyPoints } from '../modules/roads/service';
@@ -28,8 +29,9 @@ async function maintenance(){await expireSessions();await checkOverstays();await
  await db.refreshToken.deleteMany({where:{expiresAt:{lt:new Date(Date.now()-2592000000)}}});
 }
 const workers=[new Worker('parkflow-maintenance',async job=>{if(job.name==='outbox')await drainOutbox();else await maintenance();},{connection:redisConnection(),concurrency:1}),new Worker('parkflow-push',job=>deliverPush(job.data.notificationId),{connection:redisConnection(),concurrency:5})];
+const stopRedisMemoryMonitor=startRedisMemoryMonitor();
 for(const w of workers)w.on('failed',(job,err)=>logger.error({jobId:job?.id,err},'Job failed'));
 async function main(){await db.$connect();await maintenanceQueue.upsertJobScheduler('outbox',{every:1000},{name:'outbox'});await maintenanceQueue.upsertJobScheduler('maintenance',{every:30000},{name:'maintenance',opts:{attempts:5,backoff:{type:'exponential',delay:5000}}});logger.info('Worker ready');}
 void main().catch(e=>{logger.fatal(e);process.exit(1);});
-async function close(){await Promise.all(workers.map(w=>w.close()));await maintenanceQueue.close();await pushQueue.close();await sockets.close();await db.$disconnect();await redis.quit();}
+async function close(){await stopRedisMemoryMonitor();await Promise.all(workers.map(w=>w.close()));await maintenanceQueue.close();await pushQueue.close();await sockets.close();await db.$disconnect();await redis.quit();}
 process.on('SIGTERM',()=>void close());process.on('SIGINT',()=>void close());

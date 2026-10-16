@@ -44,16 +44,18 @@ export const useAuthStore = create<AuthState>()((set) => ({
       }
       const parsed = JSON.parse(raw) as PersistedAuth;
       // A stored user is a rendering cache; the backend refreshes identity and authorizes every request.
-      set({ session: parsed.session, user: parsed.user });
+      set({ session: parsed.session, user: parsed.user, hydrated: true });
       const { api } = await import('@/services/http/apiClient');
       try {
         const user = await api<User>('/auth/me');
-        useAuthStore.getState().setUser(user);
-      } catch (error) {
-        // Preserve the refresh token for a temporary network outage, never for a revoked session.
-        if (error instanceof Error && 'code' in error && error.code === 'unauthorized') {
-          await useAuthStore.getState().signOut();
+        // A proxy/invalid response must never erase the cached identity and trigger onboarding.
+        if (user && user.id === parsed.session.userId && typeof user.fullName === 'string'
+            && useAuthStore.getState().session?.userId === parsed.session.userId) {
+          useAuthStore.getState().setUser(user);
         }
+      } catch {
+        // apiClient clears only the matching session on a confirmed authentication rejection.
+        // A timeout, invalid response, or stale request must preserve the cached identity.
       }
       set({ hydrated: true });
     } catch {
@@ -77,8 +79,8 @@ export const useAuthStore = create<AuthState>()((set) => ({
   },
 
   signOut: async () => {
-    await secureStorage.removeItem(STORAGE_KEYS.authSession);
     set({ session: undefined, user: undefined });
+    await secureStorage.removeItem(STORAGE_KEYS.authSession);
   },
 }));
 
