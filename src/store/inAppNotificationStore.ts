@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { AppNotification } from '@/types';
+import { normalizeNotification } from '@/utils/notifications';
 
 interface InAppNotificationState {
   /** The notification currently shown as an on-screen banner. */
@@ -15,9 +16,10 @@ export const useInAppNotificationStore = create<InAppNotificationState>((set, ge
   current: undefined,
   shown: new Set(),
   show: (notification) => {
-    if (!notification?.id || get().shown.has(notification.id)) return;
-    get().shown.add(notification.id);
-    set({ current: notification });
+    const safeNotification = normalizeNotification(notification);
+    if (!safeNotification || get().shown.has(safeNotification.id)) return;
+    get().shown.add(safeNotification.id);
+    set({ current: safeNotification });
   },
   dismiss: () => set({ current: undefined }),
 }));

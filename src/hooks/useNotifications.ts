@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { services } from '@/services';
 import { queryKeys } from './queryKeys';
 import { useUserId } from './useSession';
+import { normalizeNotifications } from '@/utils/notifications';
 
 export function useNotifications() {
   const userId = useUserId();
@@ -9,6 +10,7 @@ export function useNotifications() {
   return useQuery({
     queryKey: queryKeys.notifications(userId ?? 'anonymous'),
     queryFn: () => services.notifications.list(userId!),
+    select: normalizeNotifications,
     enabled: Boolean(userId),
   });
 }

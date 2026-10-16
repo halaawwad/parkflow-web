@@ -7,7 +7,7 @@ import { X } from 'lucide-react-native';
 
 import { AppText } from '@/components/ui/AppText';
 import { PressableScale } from '@/components/ui/PressableScale';
-import { NOTIFICATION_ICONS } from '@/components/domain/notificationIcons';
+import { getNotificationIcon } from '@/components/domain/notificationIcons';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, screenPadding } from '@/theme/spacing';
 import { radius } from '@/theme/radius';
@@ -42,7 +42,7 @@ export function NotificationBanner() {
 
   if (!notification) return null;
 
-  const Icon = NOTIFICATION_ICONS[notification.type] ?? NOTIFICATION_ICONS.system;
+  const Icon = getNotificationIcon(notification.type);
   const reward = notification.type === 'points_awarded' || notification.type === 'reward_paid';
   const title = locale === 'ar' ? notification.titleAr : notification.title;
   const body = locale === 'ar' ? notification.bodyAr : notification.body;

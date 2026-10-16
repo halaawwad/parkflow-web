@@ -23,7 +23,7 @@ import {
   useNotifications,
 } from '@/hooks/useNotifications';
 import type { AppNotification } from '@/types';
-import { ALERT_NOTIFICATION_TYPES, NOTIFICATION_ICONS } from '@/components/domain/notificationIcons';
+import { ALERT_NOTIFICATION_TYPES, getNotificationIcon } from '@/components/domain/notificationIcons';
 import { formatDayHeading, formatTime } from '@/utils/time';
 import { haptics } from '@/utils/haptics';
 
@@ -123,7 +123,7 @@ export default function NotificationsScreen() {
             </AppText>
           )}
           renderItem={({ item }) => {
-            const Icon = NOTIFICATION_ICONS[item.type];
+            const Icon = getNotificationIcon(item.type);
             const unread = !item.readAt;
             const alert = ALERT_NOTIFICATION_TYPES.includes(item.type);
 
