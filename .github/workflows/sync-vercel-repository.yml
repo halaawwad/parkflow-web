@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   sync:
+    if: github.repository == 'yazeedbesher12/ParkFlow'
     runs-on: ubuntu-latest
     steps:
       - name: Check out the pushed revision

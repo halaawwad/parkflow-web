@@ -322,6 +322,50 @@ Render logs should show `ParkFlow API ready`, `Worker ready`, and no `Job failed
 
 ## 10. Automatic deployment from `main`
 
+### One-way Vercel repository synchronization
+
+`.github/workflows/sync-vercel-repository.yml` runs its sync job only in
+`yazeedbesher12/ParkFlow`. It forwards `main` to `halaawwad/parkflow-web:main`
+without changing commit authors or history. The ancestor check and normal push
+reject divergent target history; never force-push or edit the target independently.
+The copied workflow is skipped in the target repository.
+
+Vercel Hobby does not support multiple commit authors for a private repository;
+[collaboration is free for public repositories](https://vercel.com/docs/deployments/troubleshoot-project-collaboration).
+To enable contributor deployments while keeping the current Vercel project:
+
+1. Commit and push the workflow guard to the source `main` through the normal
+   review process. Let the existing sync copy it to the target. Do not commit the
+   guard separately in the target, which would cause divergence.
+2. After an owner explicitly approves making the target public, use
+   `halaawwad/parkflow-web` **Settings > General > Danger Zone > Change repository
+   visibility > Public**. Do not recreate, rename, transfer, or reconnect the Vercel
+   project. Keep the connected repository, production branch `main`, domains,
+   environment variables, and build settings unchanged.
+3. In the existing Vercel project's **Deployments** page, retry the blocked
+   revision if available, or use **Create Deployment** with `main`. Confirm its
+   Production deployment succeeds and the existing production domain still works.
+   Subsequent source commits should sync and trigger deployment automatically.
+
+Read-only visibility review on 2026-10-16: both remote `main` refs were
+`7488ae8ce50f20f64b468ed2ea3527833927435c`. The target advertised only `main`,
+with no tags. All 54 reachable target commits were already reachable in the public
+source; 1,056 historical file blobs were scanned for credential patterns and
+sensitive filenames. No actual credentials, private keys, tracked runtime `.env`
+files, database dumps, or credential files were identified. Matches were empty
+examples, placeholders, test credentials, or environment references. Local `.env`
+and `server/.env` are ignored and untracked; keep them that way. GitHub reported no
+issues, releases/assets, wiki, or Actions artifacts in the target. Both available
+Actions runs' logs were scanned without finding token/private-key patterns or
+unmasked authenticated GitHub URLs. This is a point-in-time review, not a guarantee
+against every possible secret; recheck any new content before visibility changes.
+The existing repository homepage is `https://parkflow-web-gamma.vercel.app`;
+no Vercel dashboard settings were changed or independently verified by this audit.
+
+If the target must remain private, multi-author collaboration requires Vercel Pro
+with contributor team access. Changing the sync token does not change commit
+authorship or remove Hobby's private-repository restriction.
+
 - **Render**: `autoDeployTrigger: commit` redeploys `parkflow-api` on every push to `main` that changes the
   service. With `rootDir: server`, only changes under `server/` trigger a deploy. Each deploy runs migrations at start.
 - **Vercel**: every push to `main` builds a Production deployment, and other branches and PRs get Preview
