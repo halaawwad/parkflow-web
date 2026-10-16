@@ -102,6 +102,9 @@ export default function ProfileScreen() {
         }}
       >
         <TabHeader title={t('profile.title')} />
+      {user?.role === 'ADMIN' || user?.role === 'PARKING_OPERATOR' ? (
+        <AppButton label={dateLocale.startsWith('ar') ? 'إدارة المواقف' : 'Parking management'} variant="secondary" onPress={() => router.push('/management')} />
+      ) : null}
 
         <Card padding="xl" style={{ alignItems: 'center', gap: spacing.md }}>
           <Avatar name={user?.fullName} size={76} />

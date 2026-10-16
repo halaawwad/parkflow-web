@@ -1,0 +1,57 @@
+name: Management portal validation
+on:
+  pull_request:
+    paths: ['app/**', 'src/**', 'server/**', '.github/workflows/management-portal.yml']
+  push:
+    branches: ['integrate/management-portals']
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: parkflow
+          POSTGRES_PASSWORD: isolated-ci-only
+          POSTGRES_DB: parkflow_test
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U parkflow -d parkflow_test" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://parkflow:isolated-ci-only@localhost:5432/parkflow_test
+      DATABASE_URL: postgresql://parkflow:isolated-ci-only@localhost:5432/parkflow_test
+      REDIS_URL: redis://localhost:6379
+      NODE_ENV: test
+      JWT_ACCESS_SECRET: isolated-management-ci-access-secret-only
+      JWT_REFRESH_SECRET: isolated-management-ci-refresh-secret-only
+      PAYMENT_WEBHOOK_SECRET: isolated-management-ci-webhook-secret-only
+      EMAIL_FROM: tests@parkflow.example
+      SMTP_HOST: localhost
+      SMTP_USER: isolated-test
+      S3_ENDPOINT: http://localhost:9000
+      S3_BUCKET: isolated-tests
+      S3_ACCESS_KEY: isolated-test
+      S3_SECRET_KEY: isolated-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npx expo export --platform web --max-workers 1 --output-dir /tmp/parkflow-management-export
+        env:
+          EXPO_PUBLIC_API_BASE_URL: https://example.invalid/api/v1
+      - run: npm ci && npm run db:generate && npm run build
+        working-directory: server
+      - run: npm test -- tests/managementPortal.test.ts tests/core.test.ts
+        working-directory: server
