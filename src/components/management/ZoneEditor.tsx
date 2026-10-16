@@ -35,19 +35,23 @@ export function ZoneEditor({zone,onClose}:{zone:ManagementZone;onClose:()=>void}
     if(!current&&(!/^[0-9]+$/.test(increment)||Number(increment)<1||Number(increment)>60||!/^[0-9]+$/.test(free)||Number(free)>1440||!minimum.trim()||!Number.isFinite(Number(minimum))||Number(minimum)<0))throw new Error(ar?'تحقق من شروط التعرفة.':'Check tariff terms.');
     return managementService.saveTariff(zone.id,{name:ar?'تحديث التعرفة':'Rate update',hourlyRate:Math.round(value*100),incrementMinutes:current?.incrementMinutes??Number(increment),freeMinutes:current?.freeMinutes??Number(free),minimumCharge:current?.minimumCharge??Math.round(Number(minimum)*100),...(current?.dailyCap!=null?{dailyCap:current.dailyCap}:{}),...(current?.maxStayMinutes!=null?{maxStayMinutes:current.maxStayMinutes}:{}),validFrom:new Date().toISOString()});
   },onMutate:()=>setNotice(''),onSuccess:()=>{setNotice(ar?'تم الحفظ.':'Saved.');for(const key of ['management','admin','zones','zone'])void client.invalidateQueries({queryKey:[key]});}});
+  const canManage=zone.canManageZone !== false;
   const button=(label:string,action:'details'|'availability'|'hours'|'tariff')=><AppButton label={label} loading={mutate.isPending&&mutate.variables===action} disabled={mutate.isPending} onPress={()=>mutate.mutate(action)}/>;
   return <BottomSheet visible onClose={()=>{if(!mutate.isPending)onClose();}} title={ar?zone.nameAr:zone.name} scrollable>
     <View style={{gap:spacing.lg}}>
       {mutate.error?<InlineNotice tone="danger" title={ar?'تعذر الحفظ':'Unable to save'} body={errorMessage(mutate.error)}/>:null}
       {notice?<InlineNotice tone="success" title={notice}/>:null}
+      {canManage ? <>
       <TextField label={ar?'الاسم بالإنجليزية':'English name'} value={name} onChangeText={setName}/>
       <TextField label={ar?'الاسم بالعربية':'Arabic name'} value={nameAr} onChangeText={setNameAr}/>
       <TextField label={ar?'السعة':'Capacity'} value={capacity} onChangeText={setCapacity} keyboardType="number-pad"/>
       <SwitchRow label={ar?'الموقف نشط':'Active zone'} value={active} onValueChange={setActive}/>
       {button(ar?'حفظ التفاصيل':'Save details','details')}
-      <Card style={{gap:spacing.md}}><AppText variant="title">{ar?'تحديث التوفر':'Update availability'}</AppText><Segmented value={availability} onChange={setAvailability} options={[
+      </> : <AppText color="textSecondary">{zone.code} · {zone.capacity??'—'}</AppText>}
+      {canManage || zone.canUpdateAvailability ? <Card style={{gap:spacing.md}}><AppText variant="title">{ar?'تحديث التوفر':'Update availability'}</AppText><Segmented value={availability} onChange={setAvailability} options={[
         {value:'available',label:ar?'متاح':'Available'},{value:'limited',label:ar?'محدود':'Limited'},{value:'full',label:ar?'ممتلئ':'Full'},{value:'unknown',label:ar?'غير معروف':'Unknown'},
-      ]}/>{button(ar?'نشر التوفر':'Publish availability','availability')}</Card>
+      ]}/>{button(ar?'نشر التوفر':'Publish availability','availability')}</Card> : null}
+      {canManage ? <>
       <Card style={{gap:spacing.md}}><AppText variant="title">{ar?'السعر بالشيكل لكل ساعة':'Hourly rate (ILS)'}</AppText>
         <TextField label={ar?'السعر الجديد':'New rate'} value={rate} onChangeText={setRate} keyboardType="decimal-pad"/>
         <AppText variant="caption">{ar?'يحافظ على شروط التعرفة الحالية، ويطبّق السعر الجديد من وقت الحفظ.':'Preserves current tariff terms; the new rate starts when saved.'}</AppText>
@@ -67,6 +71,7 @@ export function ZoneEditor({zone,onClose}:{zone:ManagementZone;onClose:()=>void}
             <View style={{flex:1}}><TextField label={ar?'يغلق HH:mm':'Closes HH:mm'} value={h.closesAt} maxLength={5} onChangeText={closesAt=>setHours(list=>list.map((x,j)=>j===i?{...x,closesAt}:x))}/></View>
           </View>
         </View>)}{button(ar?'حفظ ساعات العمل':'Save hours','hours')}</Card>:<AppButton label={ar?'إعداد الأسبوع (مغلق حتى التعديل)':'Set up week (closed until edited)'} variant="secondary" onPress={()=>setHours(Array.from({length:7},(_,weekday)=>({weekday,opensAt:'00:00',closesAt:'00:00',closed:true})))}/>}
+      </> : null}
     </View>
   </BottomSheet>;
 }

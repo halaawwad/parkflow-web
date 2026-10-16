@@ -22,7 +22,7 @@ export default function AdminDashboard() {
   const ar = locale === 'ar';
   const [tab, setTab] = useState<Tab>('overview');
   const summary = useQuery({ queryKey: ['admin', 'summary', user?.id], queryFn: managementService.summary, enabled: user?.role === 'ADMIN' });
-  if (user?.role === 'PARKING_OPERATOR') return <Redirect href="/management/zones" />;
+  if (user?.role !== 'ADMIN') return <Redirect href="/management/zones" />;
   if (user?.role !== 'ADMIN') return null;
   return <Screen contentContainerStyle={{ gap: spacing.xl }}>
     <AppHeader title={ar ? 'لوحة الإدارة' : 'Admin dashboard'} trailing={<AppButton label={ar ? 'تحديث' : 'Refresh'} size="sm" fullWidth={false} variant="secondary" loading={summary.isFetching} onPress={() => void summary.refetch()} />} />

@@ -36,6 +36,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/spacing';
 import { radius } from '@/theme/radius';
 import { useLocale } from '@/hooks/useLocale';
+import { useManagementAccess } from '@/hooks/useManagementAccess';
 import { useIsGateStaff } from '@/hooks/useGates';
 import { useCurrentUser } from '@/hooks/useSession';
 import { useTrust } from '@/hooks/useCommunity';
@@ -70,6 +71,7 @@ export default function ProfileScreen() {
   const { colors } = useTheme();
   const { t, dateLocale } = useLocale();
   const staff = useIsGateStaff();
+  const managementAccess = useManagementAccess();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
 
@@ -102,7 +104,7 @@ export default function ProfileScreen() {
         }}
       >
         <TabHeader title={t('profile.title')} />
-      {user?.role === 'ADMIN' || user?.role === 'PARKING_OPERATOR' ? (
+      {user?.role === 'ADMIN' || user?.role === 'PARKING_OPERATOR' || managementAccess.data?.hasAccess ? (
         <AppButton label={dateLocale.startsWith('ar') ? 'إدارة المواقف' : 'Parking management'} variant="secondary" onPress={() => router.push('/management')} />
       ) : null}
 
