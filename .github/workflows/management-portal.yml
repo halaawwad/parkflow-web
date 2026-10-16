@@ -3,7 +3,7 @@ on:
   pull_request:
     paths: ['app/**', 'src/**', 'server/**', '.github/workflows/management-portal.yml']
   push:
-    branches: ['integrate/management-portals']
+    branches: ['integrate/management-portals', 'integrate/operator-analytics-staff']
 permissions:
   contents: read
 jobs:
@@ -53,5 +53,5 @@ jobs:
           EXPO_PUBLIC_API_BASE_URL: https://example.invalid/api/v1
       - run: npm ci && npm run db:generate && npm run build
         working-directory: server
-      - run: npm test -- tests/managementPortal.test.ts tests/core.test.ts
+      - run: npm test -- tests/managementPortal.test.ts tests/operatorStaff.test.ts tests/core.test.ts
         working-directory: server

@@ -1,4 +1,4 @@
-import type { AdminUser, AdminRoadReport, AdminAppeal, AdminAuditLog, ManagementZone, ManagementOperator, ManagementSummary, Availability } from '@/types/management';
+import type { AdminUser, AdminRoadReport, AdminAppeal, AdminAuditLog, ManagementZone, ManagementOperator, ManagementSummary, Availability, OperatorAccess, OperatorAnalytics, StaffMember } from '@/types/management';
 import { api, query, segment } from './apiClient';
 
 // Reuses the existing bearer-token/refresh flow; no new login or session mode.
@@ -6,9 +6,16 @@ export const managementService = {
   summary: () => api<ManagementSummary>('/admin/summary'),
   users: (search = '') => api<AdminUser[]>('/admin/users' + query({ query: search.trim() || undefined })),
   updateUser: (id: string, input: { role?: AdminUser['role']; status?: AdminUser['status'] }) => api(`/admin/users/${segment(id)}`, { method: 'PATCH', body: input }),
-  zones: () => api<ManagementZone[]>('/admin/parking-zones'),
+  zones: () => api<ManagementZone[]>('/operator/zones'),
+  access: () => api<OperatorAccess>('/operator/access'),
+  analytics: (days=30) => api<OperatorAnalytics>('/operator/analytics'+query({days})),
+  ownedOrganizations: () => api<Array<{id:string;name:string;type:string}>>('/operator/organizations'),
+  staff: (operatorId:string) => api<StaffMember[]>(`/operator/organizations/${segment(operatorId)}/staff`),
+  addStaff: (operatorId:string,input:{email:string;canViewAnalytics:boolean;canUpdateAvailability:boolean}) => api<StaffMember>(`/operator/organizations/${segment(operatorId)}/staff`,{method:'POST',body:input}),
+  updateStaff: (operatorId:string,userId:string,input:{canViewAnalytics:boolean;canUpdateAvailability:boolean}) => api<StaffMember>(`/operator/organizations/${segment(operatorId)}/staff/${segment(userId)}`,{method:'PATCH',body:input}),
+  removeStaff: (operatorId:string,userId:string) => api(`/operator/organizations/${segment(operatorId)}/staff/${segment(userId)}`,{method:'DELETE'}),
   updateZone: (id: string, input: {name?: string; nameAr?: string; active?: boolean; capacity?: number}) => api<ManagementZone>(`/admin/parking-zones/${segment(id)}`, { method: 'PATCH', body: input }),
-  updateAvailability: (zoneId: string, availability: Availability, source: 'ADMIN' | 'OPERATOR') => api(`/admin/parking-zones/${segment(zoneId)}/availability`, { method: 'POST', body: { availability, source, confidence: 1 } }),
+  updateAvailability: (zoneId: string, availability: Availability, source: 'ADMIN' | 'OPERATOR') => api(`/operator/zones/${segment(zoneId)}/availability`, { method: 'POST', body: { availability, confidence: 1 } }),
   saveHours: (zoneId: string, hours: ManagementZone['operatingHours']) => api(`/admin/parking-zones/${segment(zoneId)}/hours`, { method: 'PATCH', body: { hours } }),
   saveTariff: (zoneId: string, input: {name: string; hourlyRate: number; incrementMinutes: number; freeMinutes: number; minimumCharge: number; dailyCap?: number; maxStayMinutes?: number; validFrom: string}) => api(`/admin/parking-zones/${segment(zoneId)}/tariffs`, { method: 'POST', body: input }),
   reports: () => api<AdminRoadReport[]>('/admin/road-reports'),

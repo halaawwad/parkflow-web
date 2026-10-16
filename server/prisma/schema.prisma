@@ -170,6 +170,7 @@ model User {
   refreshTokens           RefreshToken[]
   vehicles                UserVehicle[]
   operators               OperatorUser[]
+  staffAssignments        OperatorStaff[]
   sessions                ParkingSession[]
   wallet                  Wallet?
   paymentMethods          PaymentMethod[]
@@ -258,6 +259,7 @@ model ParkingOperator {
   type      String         @default("municipality")
   createdAt DateTime       @default(now())
   users     OperatorUser[]
+  staff     OperatorStaff[]
   zones     ParkingZone[]
 
   @@map("parking_operators")
@@ -1253,4 +1255,20 @@ model CrashEvent {
 
   @@index([userId, detectedAt])
   @@map("crash_events")
+}
+
+// Staff assignments never grant owner membership or a global role.
+model OperatorStaff {
+  operatorId           String
+  userId               String
+  canViewAnalytics     Boolean @default(false)
+  canUpdateAvailability Boolean @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  operator ParkingOperator @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([operatorId, userId])
+  @@index([userId])
+  @@map("operator_staff")
 }

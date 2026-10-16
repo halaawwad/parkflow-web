@@ -61,6 +61,8 @@ export interface AdminAuditLog {
 
 export type Availability = 'available' | 'limited' | 'full' | 'unknown';
 export interface ManagementZone extends AdminZone {
+  canManageZone?: boolean;
+  canUpdateAvailability?: boolean;
   operatorId: string;
   description: string | null;
   address: string | null;
@@ -72,3 +74,16 @@ export interface ManagementZone extends AdminZone {
 }
 export interface ManagementOperator { id: string; name: string; type: string; users: Array<{userId: string}> }
 export interface ManagementSummary { activeUsers: number; suspendedUsers: number; activeZones: number; visibleReports: number; openAppeals: number }
+
+export interface OperatorAccess {hasAccess:boolean;canManageStaff:boolean;canViewAnalytics:boolean}
+export interface StaffMember {
+  operatorId:string;userId:string;canViewAnalytics:boolean;canUpdateAvailability:boolean;
+  user:{id:string;fullName:string;email:string|null;status:'ACTIVE'|'SUSPENDED'};
+}
+export interface OperatorAnalytics {
+  window:{startTime:string;endTime:string};
+  zones:Array<{zoneId:string;name:string;nameAr:string;capacity:number|null;activeSessions:number;
+    reservationConversion:{total:number;checkedIn:number;rate:number|null};feedQuality:{samples:number};
+    latestObservation:{recordedAt:string;source:string;occupiedSpaces:number|null;occupancyPercent:number|null}|null;
+  }>;
+}
