@@ -19,7 +19,7 @@ export default function OperatorAnalytics(){
   if(!access.data?.canViewAnalytics)return <Screen><AppText>{ar?'لا تملك صلاحية عرض التحليلات.':'Analytics permission required.'}</AppText></Screen>;
   return <Screen contentContainerStyle={{gap:spacing.lg}}>
     <AppHeader title={ar?'تحليلات المواقف':'Parking analytics'} trailing={<AppButton label={ar?'تحديث':'Refresh'} variant="secondary" size="sm" fullWidth={false} loading={analytics.isFetching} onPress={()=>void analytics.refetch()}/>}/>
-    <Segmented value={period} onChange={setPeriod} options={['7','30','90'].map(value=>({value:value as '7'|'30'|'90',label:ar?`آخر ${value} يوم`:`Last ${value} days`}))}/>
+    <Segmented variant="inset" value={period} onChange={setPeriod} options={['7','30','90'].map(value=>({value:value as '7'|'30'|'90',label:ar?`آخر ${value} يوم`:`Last ${value} days`}))}/>
     <AppText variant="caption" color="textSecondary">{ar?'الحجوزات المنشأة خلال الفترة، وآخر إشغال مسجّل. غياب بيانات الإشغال يظهر كغير متوفر.':'Reservations created during the period and the latest recorded occupancy. Missing occupancy is shown as unavailable.'}</AppText>
     {analytics.isPending?<SkeletonGroup count={2}/>:analytics.error?<ErrorState error={analytics.error} onRetry={()=>void analytics.refetch()}/>:analytics.data.zones.length===0?<EmptyState title={ar?'لا توجد مواقف متاحة للتحليل.':'No assigned zones available for analytics.'}/>:<View style={{gap:spacing.lg}}>
       {analytics.data.zones.map(zone=><Card key={zone.zoneId} padding="lg" style={{gap:spacing.md}}>
