@@ -86,6 +86,7 @@ function RootNavigator() {
       <Stack.Screen name="rides" />
       <Stack.Screen name="spots" />
       <Stack.Screen name="gate" />
+      <Stack.Screen name="management" />
       <Stack.Screen name="vehicles" />
       <Stack.Screen name="wallet" />
       <Stack.Screen name="activity" />
