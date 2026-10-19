@@ -547,6 +547,8 @@ export const en = {
   'map.nearLandmarkBody': 'Showing the parking closest to this place',
   'map.clearSearch': 'Clear search',
 
+  'profile.management': 'Parking management',
+  'profile.managementBody': 'Zones, staff and analytics',
   'route.title': 'Route to {name}',
   'route.loading': 'Finding the best route…',
   'route.summary': '{minutes} min · {distance}',

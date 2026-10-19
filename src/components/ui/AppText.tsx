@@ -1,9 +1,9 @@
 import { Text, type TextProps, type TextStyle } from 'react-native';
 import { useMemo } from 'react';
 import {
-  fontFamily,
-  systemFallback,
+  ARABIC_LINE_HEIGHT_SCALE,
   maxFontSizeMultiplier,
+  typeFace,
   typography,
   type FontWeightToken,
   type TypographyVariant,
@@ -59,13 +59,10 @@ export function AppText({
     const resolvedAlign =
       align ?? (forceLtrAlign ? 'left' : (textAlign as TextStyle['textAlign']));
     return {
-      fontFamily: isRTL ? systemFallback : fontFamily[weight ?? spec.weight],
-      fontWeight: isRTL
-        ? ({ regular: '400', medium: '500', semibold: '600', bold: '700', extrabold: '800' } as const)[weight ?? spec.weight]
-        : undefined,
+      fontFamily: typeFace(isRTL, weight ?? spec.weight),
       fontSize: spec.fontSize,
-      lineHeight: spec.lineHeight,
-      letterSpacing: spec.letterSpacing,
+      lineHeight: isRTL && spec.lineHeight ? Math.round(spec.lineHeight * ARABIC_LINE_HEIGHT_SCALE) : spec.lineHeight,
+      letterSpacing: isRTL ? 0 : spec.letterSpacing,
       textTransform: spec.textTransform,
       color: colors[color],
       textAlign: resolvedAlign,

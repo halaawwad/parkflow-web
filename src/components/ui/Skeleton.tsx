@@ -1,15 +1,8 @@
-import { useEffect } from 'react';
 import { View, type StyleProp, type ViewStyle, type DimensionValue } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-  interpolateColor,
-} from 'react-native-reanimated';
+import Animated, { cubicBezier, useReducedMotion } from 'react-native-reanimated';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius } from '@/theme/radius';
-import { duration, easing } from '@/theme/motion';
+import { duration } from '@/theme/motion';
 
 export interface SkeletonProps {
   width?: DimensionValue;
@@ -18,34 +11,35 @@ export interface SkeletonProps {
   style?: StyleProp<ViewStyle>;
 }
 
+const breathe = {
+  from: { opacity: 1 },
+  to: { opacity: 0.5 },
+};
+
 /**
- * A soft colour pulse rather than a sliding highlight — cheaper on low-end
- * Android and calmer to look at when several are on screen at once.
+ * A soft breathing pulse rather than a sliding highlight — calmer when several
+ * are on screen. It is an opacity-only CSS animation, so it runs off the JS
+ * thread (compositor on web, UI thread on native) and stays smooth while the
+ * data it stands in for is loading. Still under reduced motion.
  */
 export function Skeleton({ width = '100%', height = 16, radiusToken = 'sm', style }: SkeletonProps) {
   const { colors } = useTheme();
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    progress.value = withRepeat(
-      withTiming(1, { duration: duration.pulse / 2, easing: easing.standard }),
-      -1,
-      true,
-    );
-  }, [progress]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(
-      progress.value,
-      [0, 1],
-      [colors.skeleton, colors.skeletonHighlight],
-    ),
-  }));
+  const reducedMotion = useReducedMotion();
 
   return (
     <Animated.View
       accessibilityRole="progressbar"
-      style={[{ width, height, borderRadius: radius[radiusToken] }, animatedStyle, style]}
+      style={[
+        { width, height, borderRadius: radius[radiusToken], backgroundColor: colors.skeleton },
+        !reducedMotion && {
+          animationName: breathe,
+          animationDuration: `${duration.pulse / 2}ms`,
+          animationIterationCount: 'infinite',
+          animationDirection: 'alternate',
+          animationTimingFunction: cubicBezier(0.4, 0, 0.6, 1),
+        },
+        style,
+      ]}
     />
   );
 }

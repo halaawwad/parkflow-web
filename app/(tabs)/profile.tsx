@@ -17,6 +17,7 @@ import {
   Settings,
   TriangleAlert,
   User as UserIcon,
+  LayoutDashboard,
 } from 'lucide-react-native';
 import { useState } from 'react';
 import Constants from 'expo-constants';
@@ -104,9 +105,6 @@ export default function ProfileScreen() {
         }}
       >
         <TabHeader title={t('profile.title')} />
-      {user?.role === 'ADMIN' || user?.role === 'PARKING_OPERATOR' || managementAccess.data?.hasAccess ? (
-        <AppButton label={dateLocale.startsWith('ar') ? 'إدارة المواقف' : 'Parking management'} variant="secondary" onPress={() => router.push('/management')} />
-      ) : null}
 
         <Card padding="xl" style={{ alignItems: 'center', gap: spacing.md }}>
           <Avatar name={user?.fullName} size={76} />
@@ -124,6 +122,18 @@ export default function ProfileScreen() {
             </AppText>
           ) : null}
         </Card>
+
+        {user?.role === 'ADMIN' || user?.role === 'PARKING_OPERATOR' || managementAccess.data?.hasAccess ? (
+          <Card padding="lg" style={{ paddingVertical: spacing.xs }}>
+            <ListItem
+              title={t('profile.management')}
+              subtitle={t('profile.managementBody')}
+              leading={<MenuIcon><LayoutDashboard {...iconProps} /></MenuIcon>}
+              showChevron
+              onPress={() => router.push('/management')}
+            />
+          </Card>
+        ) : null}
 
         <Card padding="lg" style={{ paddingVertical: spacing.xs }}>
           <ListItem
