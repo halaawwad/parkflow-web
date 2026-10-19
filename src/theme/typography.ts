@@ -14,6 +14,30 @@ export const fontFamily = {
   extrabold: 'PlusJakartaSans_800ExtraBold',
 } as const;
 
+/**
+ * Arabic face. IBM Plex Sans Arabic carries Latin glyphs too, so mixed strings
+ * ("Toyota Corolla", plate numbers) stay in one family. It has no 800 weight;
+ * extrabold maps to bold.
+ */
+export const arabicFontFamily = {
+  regular: 'IBMPlexSansArabic_400Regular',
+  medium: 'IBMPlexSansArabic_500Medium',
+  semibold: 'IBMPlexSansArabic_600SemiBold',
+  bold: 'IBMPlexSansArabic_700Bold',
+  extrabold: 'IBMPlexSansArabic_700Bold',
+} as const;
+
+/** Arabic needs taller lines for its ascenders and descenders. */
+export const ARABIC_LINE_HEIGHT_SCALE = 1.14;
+
+/**
+ * Font for a weight in the current script. Letter spacing must stay at zero for
+ * Arabic: a connected script breaks apart when its letters are spread.
+ */
+export function typeFace(isRTL: boolean, weight: FontWeightToken): string {
+  return isRTL ? arabicFontFamily[weight] : fontFamily[weight];
+}
+
 export const systemFallback = Platform.select({
   ios: 'System',
   android: 'sans-serif',

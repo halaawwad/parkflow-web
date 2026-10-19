@@ -17,7 +17,7 @@ import { duration, easing, spring } from '@/theme/motion';
 import { shadow } from '@/theme/shadows';
 import { haptics } from '@/utils/haptics';
 import { useInstantMotion } from '@/hooks/useInstantMotion';
-import { WEB_APP_MAX_WIDTH, WEB_VIEWPORT_HEIGHT } from '@/components/layout/appShellMetrics';
+import { WEB_APP_MAX_WIDTH, useWebFrame } from '@/components/layout/appShellMetrics';
 
 export interface BottomSheetProps {
   visible: boolean;
@@ -54,6 +54,7 @@ export function BottomSheet({
   testID,
 }: BottomSheetProps) {
   const { colors } = useTheme();
+  const webFrame = useWebFrame();
   const insets = useSafeAreaInsets();
   // With reduced motion (or no animation frames) the sheet snaps rather than
   // slides — it must never be left parked off-screen.
@@ -228,7 +229,7 @@ export function BottomSheet({
       <View
         style={[
           StyleSheet.absoluteFill,
-          Platform.OS === 'web' && { alignItems: 'center' },
+          Platform.OS === 'web' && { alignItems: 'center', justifyContent: 'center' },
         ]}
       >
         <GestureHandlerRootView
@@ -237,7 +238,9 @@ export function BottomSheet({
               ? {
                   width: '100%',
                   maxWidth: WEB_APP_MAX_WIDTH,
-                  height: WEB_VIEWPORT_HEIGHT,
+                  // Matches the framed app column on wide screens.
+                  height: webFrame.height,
+                  borderRadius: webFrame.radius,
                   overflow: 'hidden',
                 }
               : { flex: 1 }

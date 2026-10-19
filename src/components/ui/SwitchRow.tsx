@@ -33,13 +33,13 @@ export function SwitchRow({
           alignItems: 'center',
           gap: spacing.lg,
           paddingVertical: spacing.sm,
-          opacity: disabled ? 0.5 : 1,
         },
         style,
       ]}
     >
+      {/* Only the control dims when disabled: the text often explains why, so it must stay readable. */}
       <View style={{ flex: 1, gap: 2 }}>
-        <AppText variant="titleLg">{label}</AppText>
+        <AppText variant="titleLg" color={disabled ? 'textSecondary' : 'text'}>{label}</AppText>
         {description ? (
           <AppText variant="bodySm" color="textSecondary">
             {description}
@@ -57,6 +57,8 @@ export function SwitchRow({
         thumbColor={colors.surface}
         ios_backgroundColor={colors.borderStrong}
         accessibilityLabel={label}
+        accessibilityState={{ checked: value, disabled }}
+        style={{ opacity: disabled ? 0.45 : 1 }}
       />
     </View>
   );

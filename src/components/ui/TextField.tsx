@@ -12,7 +12,7 @@ import { AppText } from './AppText';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
-import { fontFamily, systemFallback, maxFontSizeMultiplier } from '@/theme/typography';
+import { typeFace, maxFontSizeMultiplier } from '@/theme/typography';
 import { duration } from '@/theme/motion';
 import { useLocale } from '@/hooks/useLocale';
 
@@ -103,7 +103,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
             // with a leading element off the edge on narrow phones.
             minWidth: 0,
             color: colors.text,
-            fontFamily: isRTL ? systemFallback : emphasis === 'strong' ? fontFamily.bold : fontFamily.medium,
+            fontFamily: typeFace(isRTL, emphasis === 'strong' ? 'bold' : 'medium'),
             fontWeight: isRTL ? (emphasis === 'strong' ? '700' : '500') : undefined,
             fontSize: emphasis === 'strong' ? 20 : 16,
             letterSpacing: emphasis === 'strong' ? 0.4 : 0,

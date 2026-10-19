@@ -1,12 +1,7 @@
-import { useEffect, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withTiming,
-} from 'react-native-reanimated';
-import { duration as motionDuration, easing } from '@/theme/motion';
+import Animated, { cubicBezier } from 'react-native-reanimated';
+import { duration as motionDuration } from '@/theme/motion';
 import { useInstantMotion } from '@/hooks/useInstantMotion';
 
 export interface RevealProps {
@@ -19,14 +14,19 @@ export interface RevealProps {
   style?: StyleProp<ViewStyle>;
 }
 
+/** The app's signature curve (`easing.emphasized`), as a CSS timing function. */
+const EMPHASIZED = cubicBezier(0.16, 1, 0.3, 1);
+
 /**
- * The app's entrance animation.
+ * The app's entrance animation: a short rise and fade on mount.
  *
- * Driven by a mount effect rather than Reanimated's `entering` layout
- * animations, which can fail to start and leave the element `visibility:
- * hidden`. It also collapses to the final state whenever motion is reduced or
- * no animation frames are available — the content must never depend on the
- * animation actually running in order to be seen.
+ * It is a Reanimated CSS animation — real CSS keyframes on web (run by the
+ * compositor) and a UI-thread animation on native — so entrances stay smooth
+ * while the screen underneath is still rendering, instead of competing with it
+ * for the JS thread. Remount (change `key`) to play it again.
+ *
+ * Whenever motion is reduced or the page is hidden, it renders the final state
+ * directly: content must never depend on an animation running to be seen.
  */
 export function Reveal({
   children,
@@ -36,20 +36,30 @@ export function Reveal({
   style,
 }: RevealProps) {
   const instant = useInstantMotion();
-  const progress = useSharedValue(instant ? 1 : 0);
+  const keyframes = useMemo(
+    () => ({
+      from: { opacity: 0, transform: [{ translateY: offset }] },
+      to: { opacity: 1, transform: [{ translateY: 0 }] },
+    }),
+    [offset],
+  );
 
-  useEffect(() => {
-    if (instant) {
-      progress.value = 1;
-      return;
-    }
-    progress.value = withDelay(delay, withTiming(1, { duration, easing: easing.emphasized }));
-  }, [delay, duration, instant, progress]);
+  if (instant) return <Animated.View style={style}>{children}</Animated.View>;
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
-    transform: [{ translateY: (1 - progress.value) * offset }],
-  }));
-
-  return <Animated.View style={[style, animatedStyle]}>{children}</Animated.View>;
+  return (
+    <Animated.View
+      style={[
+        style,
+        {
+          animationName: keyframes,
+          animationDuration: `${duration}ms`,
+          animationDelay: `${delay}ms`,
+          animationTimingFunction: EMPHASIZED,
+          animationFillMode: 'both',
+        },
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
 }

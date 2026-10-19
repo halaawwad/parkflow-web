@@ -13,13 +13,21 @@ import {
   PlusJakartaSans_700Bold,
   PlusJakartaSans_800ExtraBold,
 } from '@expo-google-fonts/plus-jakarta-sans';
+import {
+  IBMPlexSansArabic_400Regular,
+  IBMPlexSansArabic_500Medium,
+  IBMPlexSansArabic_600SemiBold,
+  IBMPlexSansArabic_700Bold,
+} from '@expo-google-fonts/ibm-plex-sans-arabic';
 
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
+import { useLocale } from '@/hooks/useLocale';
 import { useAuthStore } from '@/store/authStore';
 import { useBackendSync } from '@/hooks/useBackendSync';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { isAppError } from '@/utils/errors';
 import { WebAppShell } from '@/components/layout/WebAppShell';
+import { IntroSequence } from '@/components/brand/IntroSequence';
 import { NotificationBanner } from '@/components/navigation/NotificationBanner';
 import { BackendConnectionNotice } from '@/components/navigation/BackendConnectionNotice';
 import { CrashCountdown } from '@/components/navigation/CrashCountdown';
@@ -71,13 +79,15 @@ function useAuthGate(ready: boolean) {
 
 function RootNavigator() {
   const { colors } = useTheme();
+  const { isRTL } = useLocale();
 
   return (
     <Stack
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.background },
-        animation: 'slide_from_right',
+        // New screens enter from the reading end: from the left in Arabic.
+        animation: isRTL ? 'slide_from_left' : 'slide_from_right',
       }}
     >
       <Stack.Screen name="index" />
@@ -109,6 +119,10 @@ function AppShell() {
     PlusJakartaSans_600SemiBold,
     PlusJakartaSans_700Bold,
     PlusJakartaSans_800ExtraBold,
+    IBMPlexSansArabic_400Regular,
+    IBMPlexSansArabic_500Medium,
+    IBMPlexSansArabic_600SemiBold,
+    IBMPlexSansArabic_700Bold,
   });
 
   const hydrateAuth = useAuthStore((s) => s.hydrate);
@@ -135,12 +149,15 @@ function AppShell() {
   // still renders, so we treat an error as "done loading".
   const ready = (fontsLoaded || Boolean(fontError)) && authHydrated && prefsHydrated;
 
+  // The native splash only needs to cover font loading; the intro sequence
+  // takes over from there while session state finishes hydrating.
+  const fontsReady = fontsLoaded || Boolean(fontError);
   useEffect(() => {
-    if (ready && !splashHidden) {
+    if (fontsReady && !splashHidden) {
       setSplashHidden(true);
       void SplashScreen.hideAsync();
     }
-  }, [ready, splashHidden]);
+  }, [fontsReady, splashHidden]);
 
   useAuthGate(ready);
 
@@ -150,6 +167,7 @@ function AppShell() {
       {ready ? <NotificationBanner /> : null}
       <BackendConnectionNotice />
       {ready ? <CrashCountdown /> : null}
+      {fontsReady ? <IntroSequence ready={ready} /> : null}
     </WebAppShell>
   );
 }

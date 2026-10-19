@@ -89,7 +89,7 @@ function ManeuverGlyph({
         <Path d="M30.5 15.5 L38 8" {...stroke} />
         <Path d="M30 8 H38 V16" {...stroke} />
         {exit ? (
-          <SvgText x={24} y={26.5} fontSize={12} fontWeight="bold" fill={color} textAnchor="middle">
+          <SvgText x={24} y={26.5} fontSize={12} fontFamily="PlusJakartaSans_700Bold" fill={color} textAnchor="middle">
             {String(exit)}
           </SvgText>
         ) : null}

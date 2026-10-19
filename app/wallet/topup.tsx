@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { CreditCard, Plus } from 'lucide-react-native';
+import { CreditCard, PenLine, Plus } from 'lucide-react-native';
 
 import {
   AppButton,
@@ -137,14 +137,26 @@ export default function TopUpScreen() {
             })}
           </View>
 
+          {/* A real control (not a text link): icon, 44pt target, role and selected state. */}
           <PressableScale
             onPress={() => {
               haptics.select();
               setIsCustom(true);
             }}
-            hitSlop={8}
-            style={{ alignSelf: alignStart, paddingVertical: spacing.xs }}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isCustom }}
+            style={{
+              alignSelf: alignStart,
+              flexDirection: row,
+              alignItems: 'center',
+              gap: spacing.xs,
+              minHeight: 44,
+              paddingHorizontal: spacing.md,
+              borderRadius: radius.pill,
+              backgroundColor: isCustom ? colors.brandSoft : 'transparent',
+            }}
           >
+            <PenLine size={15} color={isCustom ? colors.brand : colors.textSecondary} strokeWidth={2.3} />
             <AppText variant="label" color={isCustom ? 'brand' : 'textSecondary'}>
               {t('wallet.other')}
             </AppText>

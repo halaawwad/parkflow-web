@@ -218,6 +218,8 @@ export const ar: Partial<Translations> = {
   'nav.stepDistance': "على بعد {distance}",
   'nav.destinationMarker': "الوجهة",
   'nav.liveRegion': "إعلانات الملاحة",
+  'profile.management': 'إدارة المواقف',
+  'profile.managementBody': 'المناطق والموظفون والتحليلات',
   'route.summary': '{minutes} د · {distance}',
   'route.avoids': 'يتجنب {name} ({status})',
   'route.clear': 'لا إغلاقات مُبلّغ عنها على هذا الطريق',

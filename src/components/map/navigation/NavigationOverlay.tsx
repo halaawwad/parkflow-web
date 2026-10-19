@@ -93,7 +93,7 @@ const GuidanceCard = memo(function GuidanceCard({
         </View>
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
           <View style={{ flexDirection: row, alignItems: 'baseline', gap: 6 }}>
-            <AppText numeric color="onDeep" style={styles.distanceValue}>
+            <AppText numeric weight="bold" color="onDeep" style={styles.distanceValue}>
               {reliable ? value : '—'}
             </AppText>
             {reliable ? <AppText variant="titleLg" color="onDeepMuted">{unit}</AppText> : null}
@@ -450,12 +450,12 @@ export function NavigationOverlay({
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: 26, overflow: 'hidden' },
+  card: { borderRadius: radius.xxxl, overflow: 'hidden' },
   iconTile: { width: 76, height: 76, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  distanceValue: { fontSize: 40, lineHeight: 46, fontWeight: '700', letterSpacing: -1 },
+  distanceValue: { fontSize: 40, lineHeight: 48 },
   thenStrip: { alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: 10 },
   banner: { alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: 12, borderRadius: radius.lg, minHeight: 48 },
-  panel: { borderRadius: 28, padding: spacing.lg, gap: spacing.md },
+  panel: { borderRadius: radius.xxxl, padding: spacing.lg, gap: spacing.md },
   control: { flex: 1, minHeight: CONTROL_HEIGHT, borderRadius: 18, alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 2 },
   recenter: { alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.lg, height: 48, borderRadius: radius.pill },
   roundIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
