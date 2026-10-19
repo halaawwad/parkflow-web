@@ -295,7 +295,7 @@ export function NavigationOverlay({
     if (state.status === 'rerouting') return <Banner tone="info" icon={null} text={t('nav.rerouting')} busy />;
     if (state.offline) return <Banner tone="warning" icon={<CloudOff size={18} color={colors.warningText} />} text={t('nav.offline')} />;
     if (nav.voiceStatus.blocked && !nav.muted) return <Banner tone="info" icon={<Volume2 size={18} color={colors.infoText} />} text={t('nav.voiceBlocked')} onPress={nav.repeat} />;
-    if (!nav.voice.available && !nav.muted) return <Banner tone="info" icon={<VolumeX size={18} color={colors.infoText} />} text={t('nav.voiceMissing')} />;
+    if (!nav.voice.available && !nav.naturalVoice && !nav.muted) return <Banner tone="info" icon={<VolumeX size={18} color={colors.infoText} />} text={t('nav.voiceMissing')} />;
     return null;
   })();
 

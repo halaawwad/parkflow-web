@@ -4,6 +4,9 @@ import * as Haptics from 'expo-haptics';
 import type { GuidanceLocale } from './instructions';
 import type { ManeuverKind } from './maneuvers';
 import type { SpeechEngine } from './speechQueue';
+import { createNeuralSpeechEngine, type AudioPlayer, type NeuralSpeechEngine } from './neuralSpeech';
+import { services } from '@/services';
+import { AppError } from '@/utils/errors';
 
 /**
  * Device glue for navigation: the speech engine behind the queue, the voice
@@ -169,4 +172,89 @@ export function keepScreenAwake(): () => void {
     document.removeEventListener('visibilitychange', acquire);
     void sentinel?.release().catch(() => undefined);
   };
+}
+
+/** HTMLAudioElement player for server-synthesised voice on web. */
+function createWebAudioPlayer(): AudioPlayer {
+  let current: HTMLAudioElement | undefined;
+  const detach = (audio: HTMLAudioElement) => {
+    audio.onended = null;
+    audio.onerror = null;
+    if (current === audio) current = undefined;
+  };
+  return {
+    play(source, callbacks) {
+      if (current) {
+        current.pause();
+        detach(current);
+      }
+      const audio = new Audio(source);
+      current = audio;
+      audio.onended = () => {
+        detach(audio);
+        callbacks.onEnd();
+      };
+      audio.onerror = () => {
+        detach(audio);
+        callbacks.onError(audio.error ?? new Error('audio error'));
+      };
+      audio.play().catch((error: unknown) => {
+        // A pause from stop() rejects play(); that is not a failure to report.
+        if (current !== audio) return;
+        detach(audio);
+        callbacks.onError(error);
+      });
+    },
+    stop() {
+      if (!current) return;
+      const audio = current;
+      detach(audio);
+      audio.pause();
+    },
+    isPlaying() {
+      return Boolean(current && !current.paused && !current.ended);
+    },
+  };
+}
+
+function base64ToObjectUrl(base64: string, mimeType: string): string {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+}
+
+/** No server, no key, or no access: stop asking for this session. */
+function isPermanentVoiceError(error: unknown): boolean {
+  if (!(error instanceof AppError)) return false;
+  const status = Number(error.details?.status);
+  // The API client reports any 5xx as a generic network error without the server's code,
+  // so a 503 (not configured, or provider down) is recognised by status.
+  return error.details?.serverCode === 'VOICE_NOT_CONFIGURED' || [401, 403, 404, 503].includes(status);
+}
+
+export type NavigationVoice = SpeechEngine & Pick<NeuralSpeechEngine, 'prefetch' | 'available'>;
+
+/**
+ * The voice navigation speaks with. On web: natural server-synthesised speech
+ * (Gemini), falling back sentence by sentence to the browser voice. On device:
+ * the platform voice, which on current Android and iOS is already a natural
+ * neural voice.
+ */
+export function createNavigationVoice(
+  voice: () => VoiceChoice,
+  rate: () => number,
+  locale: () => GuidanceLocale,
+): NavigationVoice {
+  const device = createSpeechEngine(voice, rate);
+  if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof Audio === 'undefined') {
+    return Object.assign(device, { prefetch: () => undefined, available: false });
+  }
+  return createNeuralSpeechEngine({
+    synthesize: (text) => services.voice.speak(text, locale()).then((r) => base64ToObjectUrl(r.audio, r.mimeType)),
+    fallback: device,
+    player: createWebAudioPlayer(),
+    release: (source) => URL.revokeObjectURL(source),
+    isPermanentError: isPermanentVoiceError,
+  });
 }

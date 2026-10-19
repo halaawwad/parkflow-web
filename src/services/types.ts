@@ -245,6 +245,11 @@ export interface RoutingService {
   ): Promise<RouteResult>;
 }
 
+/** Natural navigation voice synthesised on the server (Gemini text-to-speech). */
+export interface VoiceService {
+  speak(text: string, locale: 'ar' | 'en'): Promise<{ mimeType: string; audio: string }>;
+}
+
 export interface TrustService {
   get(userId: string): Promise<TrustSummary>;
 }
@@ -270,6 +275,7 @@ export interface Services {
   roads: RoadService;
   roadReports: RoadReportService;
   routing: RoutingService;
+  voice: VoiceService;
   trust: TrustService;
   sharing: import('../types/sharing').SharingService;
   gates: import('../types/gate').GateService;

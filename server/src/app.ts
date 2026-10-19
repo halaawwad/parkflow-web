@@ -22,6 +22,8 @@ export function createApp(){const app=express();app.disable('x-powered-by');if(e
  const limiter=(prefix:string,limit:number,windowMs:number)=>rateLimit({windowMs,limit,standardHeaders:'draft-8',legacyHeaders:false,store:new RedisStore({prefix,sendCommand:(...args:string[])=>redis.call(...args as [string,...string[]]) as Promise<never>}),message:{error:{code:'RATE_LIMITED',message:'Too many requests. Try again later.'}}});
  app.use('/api/v1',limiter('rate:api:',300,60000));
  app.use('/api/v1/vehicle-warnings/check',limiter('rate:vehicle-warnings:',6,60000));
+// Route start prefetches one prompt per maneuver; a minute's budget covers long routes.
+app.use('/api/v1/voice/speak',limiter('rate:voice:',90,60000));
  if(!(env.NODE_ENV==='development'&&env.DEV_SKIP_EMAIL_OTP)) app.use('/api/v1/auth/request-otp',limiter('rate:otp:',10,600000));
  app.use('/api/v1/auth/verify-otp',limiter('rate:verify:',30,600000));
  app.use('/api/v1/auth/dev-login',limiter('rate:dev-login:',30,600000));

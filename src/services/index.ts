@@ -13,6 +13,7 @@ import { httpProfileService } from './http/profileService';
 import { httpRoadService } from './http/roadService';
 import { httpRoadReportService } from './http/roadReportService';
 import { httpRoutingService } from './http/routingService';
+import { httpVoiceService } from './http/voiceService';
 import { httpTrustService } from './http/trustService';
 import { httpSharingService } from './http/sharingService';
 import { httpGateService } from './http/gateService';
@@ -33,6 +34,7 @@ export const services: Services = {
   roads: httpRoadService,
   roadReports: httpRoadReportService,
   routing: httpRoutingService,
+  voice: httpVoiceService,
   trust: httpTrustService,
   sharing: httpSharingService,
   gates: httpGateService,
