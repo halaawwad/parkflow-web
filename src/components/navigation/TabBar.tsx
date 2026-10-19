@@ -15,6 +15,7 @@ import { duration, spring } from '@/theme/motion';
 import { useLocale } from '@/hooks/useLocale';
 import type { TranslationKey } from '@/i18n';
 import { haptics } from '@/utils/haptics';
+import { useNavigationSessionStore } from '@/store/navigationSessionStore';
 
 const ICONS: Record<string, typeof Map> = {
   map: Map,
@@ -127,6 +128,9 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
   const { colors } = useTheme();
   const { row } = useLocale();
   const insets = useSafeAreaInsets();
+  // Turn-by-turn navigation owns the whole screen.
+  const navigating = useNavigationSessionStore((s) => s.active);
+  if (navigating) return null;
 
   return (
     <View

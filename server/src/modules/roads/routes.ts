@@ -26,6 +26,9 @@ route(
     mode: z.enum(['checkpoint-aware', 'fastest']).optional(),
     snapDestination: z.boolean().optional(),
     maxAlternatives: z.number().int().min(0).max(2).optional(),
+    steps: z.boolean().optional(),
+    originBearing: z.number().min(0).max(360).optional(),
+    via: z.array(geo).max(5).optional(),
   }).strict(),
   (_r, b) => routingService.getRoute(b.origin, b.destination, b),
 );

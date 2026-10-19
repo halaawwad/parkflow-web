@@ -34,6 +34,25 @@ export interface MapRoute {
   alternatives: GeoPoint[][];
 }
 
+/** Live turn-by-turn state drawn by the map while navigating. */
+export interface MapNavigation {
+  /** Position snapped to the route (raw GPS while off it). */
+  position: GeoPoint;
+  /** Direction of travel, degrees from north. */
+  heading?: number;
+  /** GPS accuracy radius in metres. */
+  accuracy?: number;
+  /** Route already driven — drawn muted. */
+  traveled: GeoPoint[];
+  /** Route still ahead — drawn prominently. */
+  remaining: GeoPoint[];
+  destination: GeoPoint;
+  /** Camera follows the car; turned off when the user pans. */
+  follow: boolean;
+  /** Screen space taken by the guidance card and trip panel, so the car is framed between them. */
+  padding: { top: number; bottom: number };
+}
+
 export interface MapLandmark {
   name: string;
   location: GeoPoint;
@@ -88,6 +107,10 @@ export interface MapSurfaceProps {
   /** The place a landmark search resolved to. */
   landmark?: MapLandmark;
   needStops?: MapNeedStop[];
+  /** Active navigation. When set, the map draws the guided route and follows the car. */
+  navigation?: MapNavigation;
+  /** The user dragged the map (navigation stops following). */
+  onUserPan?: () => void;
   style?: StyleProp<ViewStyle>;
 }
 

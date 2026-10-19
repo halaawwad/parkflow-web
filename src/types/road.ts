@@ -125,10 +125,48 @@ export interface RouteClosure {
   status: Exclude<CheckpointStatus, 'open'>;
 }
 
+/**
+ * One maneuver exactly as the routing provider (OSRM) produced it. Turn-by-turn
+ * guidance is derived from these — never from client-side guesses.
+ */
+export interface RouteStep {
+  /** OSRM maneuver type: depart, turn, end of road, roundabout, arrive, … */
+  type: string;
+  /** OSRM modifier: left, slight right, uturn, straight, … */
+  modifier?: string;
+  /** Roundabout exit number. */
+  exit?: number;
+  location: GeoPoint;
+  bearingBefore: number;
+  bearingAfter: number;
+  /** Road the step travels along after the maneuver ('' when unnamed). */
+  name: string;
+  ref?: string;
+  distanceMeters: number;
+  durationSeconds: number;
+  geometry: GeoPoint[];
+  /** Leg index: 0 for a direct route, one more per intermediate stop. */
+  leg: number;
+}
+
+export interface RouteRequestOptions {
+  mode?: 'checkpoint-aware' | 'fastest';
+  snapDestination?: boolean;
+  maxAlternatives?: number;
+  /** Ask for turn-by-turn steps. */
+  steps?: boolean;
+  /** Current heading in degrees, so a reroute starts in the direction of travel. */
+  originBearing?: number;
+  /** Stops visited in order before the destination. */
+  via?: GeoPoint[];
+}
+
 export interface RouteResult {
   coordinates: GeoPoint[];
   distanceMeters: number;
   durationSeconds: number;
+  /** Present when requested with `steps: true` and the provider returned a real route. */
+  steps?: RouteStep[];
   /** Optional provider traffic flow, kept separate from ParkFlow Road Reports. */
   trafficSegments?: RouteTrafficSegment[];
   trafficSummary?: RouteTrafficSummary;
@@ -149,6 +187,7 @@ export interface RouteAlternative {
   coordinates: GeoPoint[];
   distanceMeters: number;
   durationSeconds: number;
+  steps?: RouteStep[];
 }
 
 export type RouteTrafficState = 'normal' | 'slow' | 'traffic_jam';

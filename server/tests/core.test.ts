@@ -149,6 +149,19 @@ describe('reports, trust and routing',()=>{
  it('aggregates parking availability on the backend',async()=>{await roads.reportZone(driver.user.id,'test-zone','full');const response=await request(app).get('/api/v1/parking/zones/test-zone').auth(driver.session.accessToken,{type:'bearer'});expect(response.body.availability).toBe('full');expect(response.body.crowd.reportCount).toBe(1);});
  it('calculates trust tiers, caps paid sessions and deducts unpaid fines',()=>{expect(trustScore({phone:true,vehicles:1,paid:3,reports:0,reportPoints:0,unpaid:0}).discountPercent).toBe(5);expect(trustScore({phone:true,vehicles:1,paid:100,reports:0,reportPoints:0,unpaid:0}).score).toBe(370);expect(trustScore({phone:true,vehicles:1,paid:0,reports:0,reportPoints:0,unpaid:3}).score).toBe(0);});
  it('ranks route alternatives with checkpoint penalties',async()=>{await roads.reportRoad(driver.user.id,'cp','closed');vi.stubGlobal('fetch',vi.fn().mockResolvedValue({json:async()=>({code:'Ok',routes:[{distance:1000,duration:100,geometry:{coordinates:[[35.19,31.9],[35.21,31.9]]}},{distance:2000,duration:200,geometry:{coordinates:[[35.19,32],[35.21,32]]}}]})}));const r=await routingService.getRoute({latitude:31.9,longitude:35.19},{latitude:31.9,longitude:35.21});expect(r.distanceMeters).toBe(2000);expect(r.rejected[0]?.blockedBy?.status).toBe('closed');});
+ it('returns OSRM turn steps for navigation, honouring the heading and intermediate stops',async()=>{
+  const step=(type:string,modifier:string|undefined,location:[number,number],name:string)=>({distance:100,duration:10,name,geometry:{coordinates:[location,[location[0]+0.001,location[1]]]},maneuver:{type,modifier,location,bearing_before:0,bearing_after:90}});
+  const fetchMock=vi.fn().mockResolvedValue({json:async()=>({code:'Ok',routes:[{distance:300,duration:30,geometry:{coordinates:[[35.19,31.9],[35.2,31.9],[35.21,31.9]]},legs:[{steps:[step('depart',undefined,[35.19,31.9],'شارع الإرسال'),step('arrive','right',[35.2,31.9],'')]},{steps:[step('depart',undefined,[35.2,31.9],''),step('turn','left',[35.205,31.9],'Al-Quds'),step('arrive','left',[35.21,31.9],'')]}]}]})});
+  vi.stubGlobal('fetch',fetchMock);
+  const r=await routingService.getRoute({latitude:31.9,longitude:35.19},{latitude:31.9,longitude:35.21},{mode:'fastest',steps:true,originBearing:93.4,via:[{latitude:31.9,longitude:35.2}]});
+  const url=String(fetchMock.mock.calls[0]?.[0]);
+  expect(url).toContain('/route/v1/driving/35.19,31.9;35.2,31.9;35.21,31.9?');
+  expect(url).toContain('steps=true');expect(url).toContain('bearings=93,60;;');expect(url).toContain('alternatives=false');
+  expect(r.steps?.map(s=>`${s.leg}:${s.type}:${s.modifier??''}`)).toEqual(['0:depart:','0:arrive:right','1:depart:','1:turn:left','1:arrive:left']);
+  expect(r.steps?.[3]).toMatchObject({name:'Al-Quds',location:{latitude:31.9,longitude:35.205},bearingBefore:0,bearingAfter:90});
+  const plain=await routingService.getRoute({latitude:31.9,longitude:35.19},{latitude:31.9,longitude:35.215},{mode:'fastest'});
+  expect(plain.steps).toBeUndefined();
+ });
  it('snaps parking destinations and returns the fastest route with at most two alternatives',async()=>{
   const fetchMock=vi.fn()
    .mockResolvedValueOnce({json:async()=>({code:'Ok',waypoints:[{location:[35.206,31.906]}]})})
