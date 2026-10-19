@@ -15,7 +15,8 @@ import { EvStationMarker } from './EvStationMarker';
 import { CarServiceMarker } from './CarServiceMarker';
 import { TourismPlaceMarker } from './TourismPlaceMarker';
 import { NeedStopMarker } from './NeedStopMarker';
-import type { MapSurfaceHandle, MapSurfaceProps } from './types';
+import { DestinationFlag, NavigationArrow } from './navigation/NavigationMarkers';
+import type { MapNavigation, MapSurfaceHandle, MapSurfaceProps } from './types';
 import { AppText } from '@/components/ui';
 import { useLocale } from '@/hooks/useLocale';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -141,6 +142,26 @@ function fitMapToCoordinates(map: L.Map, request: PendingFit): 'applied' | 'defe
   return 'applied';
 }
 
+/** Zoom used while following the car. */
+const FOLLOW_ZOOM = 17;
+
+const latLngsOf = (line: GeoPoint[]) =>
+  line.filter(isValidGeoPoint).map((point) => [point.latitude, point.longitude] as L.LatLngTuple);
+
+/**
+ * Map centre that frames the car between the guidance card and the trip panel,
+ * a little below the middle of that gap so more of the road ahead is visible.
+ */
+function followCenter(map: L.Map, navigation: MapNavigation, zoom: number): L.LatLng {
+  const size = map.getSize();
+  const { top, bottom } = navigation.padding;
+  const usable = Math.max(0, size.y - top - bottom);
+  const desiredY = top + usable * 0.66;
+  const shift = desiredY - size.y / 2;
+  const car = map.project([navigation.position.latitude, navigation.position.longitude], zoom);
+  return map.unproject(car.subtract([0, shift]), zoom);
+}
+
 function toBounds(region: GeoRegion): L.LatLngBoundsExpression {
   return [
     [region.latitude - region.latitudeDelta / 2, region.longitude - region.longitudeDelta / 2],
@@ -196,6 +217,8 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
     route,
     landmark,
     needStops,
+    navigation,
+    onUserPan,
     style,
   },
   ref,
@@ -212,8 +235,8 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
   const [, setFrame] = useState(0);
 
   // Listeners are bound once; read the latest callbacks through a ref.
-  const handlers = useRef({ onPressBackground, onPressMap, onRegionChangeComplete });
-  handlers.current = { onPressBackground, onPressMap, onRegionChangeComplete };
+  const handlers = useRef({ onPressBackground, onPressMap, onRegionChangeComplete, onUserPan });
+  handlers.current = { onPressBackground, onPressMap, onRegionChangeComplete, onUserPan };
 
   useEffect(() => {
     // On web a View ref is the underlying DOM element.
@@ -237,6 +260,8 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
       handlers.current.onRegionChangeComplete?.(next);
       redraw();
     });
+    // Only a real drag (never a programmatic pan) releases the navigation camera.
+    map.on('dragstart', () => handlers.current.onUserPan?.());
     map.on('click', (event) => {
       handlers.current.onPressMap?.({ latitude: event.latlng.lat, longitude: event.latlng.lng });
       handlers.current.onPressBackground?.();
@@ -351,6 +376,66 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
     return () => layers.forEach((layer) => layer.remove());
   }, [route, colors, t]);
 
+  // Navigation route layers are created once per session and updated in place,
+  // so the line never flickers as progress advances.
+  const navLayers = useRef<{ traveled: L.Polyline; casing: L.Polyline; remaining: L.Polyline; accuracy: L.Circle } | undefined>(undefined);
+  const navigating = Boolean(navigation);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !navigating) return;
+    const layers = {
+      // Driven part: a light, desaturated line that still reads on satellite imagery.
+      traveled: L.polyline([], { color: colors.borderStrong, weight: 7, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }),
+      casing: L.polyline([], { color: colors.surface, weight: 13, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }),
+      remaining: L.polyline([], { color: colors.brand, weight: 8, opacity: 1, lineCap: 'round', lineJoin: 'round' }),
+      accuracy: L.circle([0, 0], { radius: 0, color: colors.info, weight: 1, opacity: 0.35, fillColor: colors.info, fillOpacity: 0.1, interactive: false }),
+    };
+    Object.values(layers).forEach((layer) => layer.addTo(map));
+    navLayers.current = layers;
+    return () => {
+      Object.values(layers).forEach((layer) => layer.remove());
+      navLayers.current = undefined;
+    };
+  }, [navigating, colors]);
+
+  const traveled = navigation?.traveled;
+  const remaining = navigation?.remaining;
+  const navPosition = navigation?.position;
+  const navAccuracy = navigation?.accuracy;
+  useEffect(() => {
+    const layers = navLayers.current;
+    if (!layers || !traveled || !remaining) return;
+    layers.traveled.setLatLngs(latLngsOf(traveled));
+    layers.casing.setLatLngs(latLngsOf(remaining));
+    layers.remaining.setLatLngs(latLngsOf(remaining));
+  }, [traveled, remaining, navigating]);
+  useEffect(() => {
+    const layers = navLayers.current;
+    if (!layers || !navPosition || !isValidGeoPoint(navPosition)) return;
+    layers.accuracy.setLatLng([navPosition.latitude, navPosition.longitude]);
+    layers.accuracy.setRadius(navAccuracy && navAccuracy > 15 ? navAccuracy : 0);
+  }, [navPosition, navAccuracy, navigating]);
+
+  // Follow camera: glide to keep the car framed; jump to street zoom when following starts.
+  const navigationRef = useRef(navigation);
+  navigationRef.current = navigation;
+  const follow = Boolean(navigation?.follow);
+  const followStarted = useRef(false);
+  useEffect(() => {
+    const map = mapRef.current;
+    const current = navigationRef.current;
+    if (!map || !follow || !current || !isValidGeoPoint(current.position)) {
+      followStarted.current = false;
+      return;
+    }
+    if (!followStarted.current || map.getZoom() < FOLLOW_ZOOM - 1.5) {
+      followStarted.current = true;
+      map.setView(followCenter(map, current, FOLLOW_ZOOM), FOLLOW_ZOOM, { animate: true, duration: 0.8 } as L.ZoomPanOptions);
+      return;
+    }
+    map.panTo(followCenter(map, current, map.getZoom()), { animate: true, duration: 0.9, easeLinearity: 0.6, noMoveStart: true });
+  }, [follow, navPosition]);
+
   useImperativeHandle(ref, () => ({
     animateToRegion: (next, durationMs = 600) => {
       if (!isValidGeoRegion(next)) return;
@@ -380,8 +465,16 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
   const project = (latitude: number, longitude: number) =>
     map!.latLngToContainerPoint([latitude, longitude]);
   const size = map?.getSize();
+  const navPoint =
+    map && navigation && isValidGeoPoint(navigation.position)
+      ? project(navigation.position.latitude, navigation.position.longitude)
+      : null;
+  const destinationPoint =
+    map && navigation && isValidGeoPoint(navigation.destination)
+      ? project(navigation.destination.latitude, navigation.destination.longitude)
+      : null;
   const userPoint =
-    map && isValidGeoPoint(userLocation)
+    !navigation && map && isValidGeoPoint(userLocation)
       ? project(userLocation.latitude, userLocation.longitude)
       : null;
   const testPoint =
@@ -458,6 +551,35 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
                   borderColor: colors.surface,
                 }}
               />
+            </View>
+          ) : null}
+
+          {destinationPoint ? (
+            <View
+              pointerEvents="none"
+              style={{ position: 'absolute', left: destinationPoint.x - 20, top: destinationPoint.y - 48, zIndex: 9 }}
+            >
+              <DestinationFlag />
+            </View>
+          ) : null}
+
+          {navPoint ? (
+            <View
+              pointerEvents="none"
+              testID="navigation-position"
+              style={{
+                position: 'absolute',
+                left: navPoint.x - 23,
+                top: navPoint.y - 23,
+                zIndex: 10,
+                transform: [{ rotate: `${navigation?.heading ?? 0}deg` }],
+                // Only the heading eases; position is re-projected every frame with the map.
+                transitionProperty: 'transform',
+                transitionDuration: '600ms',
+                transitionTimingFunction: 'ease-out',
+              } as object}
+            >
+              <NavigationArrow />
             </View>
           ) : null}
 

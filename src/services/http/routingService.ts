@@ -1,11 +1,18 @@
 import type { RoutingService } from '../types';
-import type { RouteResult } from '@/types';
+import type { RouteResult, RouteStep } from '@/types';
 import { normalizeGeoPoint, normalizeGeoPoints } from '@/utils/coordinates';
 import { api } from './apiClient';
+
+const normalizeSteps = (steps?: RouteStep[]): RouteStep[] | undefined =>
+  steps?.flatMap((step) => {
+    const location = normalizeGeoPoint(step.location);
+    return location ? [{ ...step, location, geometry: normalizeGeoPoints(step.geometry) }] : [];
+  });
 
 const normalizeRoute = (route: RouteResult): RouteResult => ({
   ...route,
   coordinates: normalizeGeoPoints(route.coordinates),
+  steps: normalizeSteps(route.steps),
   rejected: route.rejected.map((item) => ({
     ...item,
     coordinates: normalizeGeoPoints(item.coordinates),
@@ -13,6 +20,7 @@ const normalizeRoute = (route: RouteResult): RouteResult => ({
   alternatives: route.alternatives.map((alternative) => ({
     ...alternative,
     coordinates: normalizeGeoPoints(alternative.coordinates),
+    steps: normalizeSteps(alternative.steps),
   })),
   trafficSegments: route.trafficSegments
     ?.map((segment) => ({

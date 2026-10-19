@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 import { ZoneMarker } from './ZoneMarker';
@@ -14,6 +14,7 @@ import { EvStationMarker } from './EvStationMarker';
 import { CarServiceMarker } from './CarServiceMarker';
 import { TourismPlaceMarker } from './TourismPlaceMarker';
 import { NeedStopMarker } from './NeedStopMarker';
+import { DestinationFlag, NavigationArrow } from './navigation/NavigationMarkers';
 import type { MapSurfaceHandle, MapSurfaceProps } from './types';
 import { AppText } from '@/components/ui';
 import { useLocale } from '@/hooks/useLocale';
@@ -62,6 +63,8 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
     route,
     landmark,
     needStops,
+    navigation,
+    onUserPan,
     style,
   },
   ref,
@@ -69,6 +72,18 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
   const { isDark, colors } = useTheme();
   const { t, row, isRTL } = useLocale();
   const mapRef = useRef<MapView>(null);
+
+  // Heading-up follow camera, tilted for a sense of the road ahead.
+  const follow = Boolean(navigation?.follow);
+  const navPosition = navigation?.position;
+  const navHeading = navigation?.heading;
+  useEffect(() => {
+    if (!follow || !navPosition) return;
+    mapRef.current?.animateCamera(
+      { center: navPosition, heading: navHeading ?? 0, pitch: 45, zoom: 17.5 },
+      { duration: 900 },
+    );
+  }, [follow, navPosition, navHeading]);
 
   useImperativeHandle(ref, () => ({
     animateToRegion: (next, durationMs = 500) => {
@@ -92,7 +107,9 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
         provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
         initialRegion={region as Region}
         customMapStyle={customMapStyle}
-        showsUserLocation={Boolean(userLocation)}
+        showsUserLocation={Boolean(userLocation) && !navigation}
+        mapPadding={navigation ? { top: navigation.padding.top, bottom: navigation.padding.bottom, left: 0, right: 0 } : undefined}
+        onPanDrag={navigation ? () => onUserPan?.() : undefined}
         showsMyLocationButton={false}
         showsCompass={false}
         toolbarEnabled={false}
@@ -104,7 +121,28 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
         }}
         onRegionChangeComplete={(next) => onRegionChangeComplete?.(next)}
       >
-        {route ? (
+        {navigation ? (
+          <>
+            <Polyline coordinates={navigation.traveled} strokeColor={colors.borderStrong} strokeWidth={7} lineCap="round" lineJoin="round" />
+            <Polyline coordinates={navigation.remaining} strokeColor={colors.surface} strokeWidth={13} lineCap="round" lineJoin="round" />
+            <Polyline coordinates={navigation.remaining} strokeColor={colors.brand} strokeWidth={8} lineCap="round" lineJoin="round" />
+            <Marker coordinate={navigation.destination} anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false} zIndex={90} accessibilityLabel={t('nav.destinationMarker')}>
+              <DestinationFlag />
+            </Marker>
+            <Marker
+              coordinate={navigation.position}
+              anchor={{ x: 0.5, y: 0.5 }}
+              flat
+              rotation={navigation.heading ?? 0}
+              tracksViewChanges={false}
+              zIndex={100}
+            >
+              <NavigationArrow />
+            </Marker>
+          </>
+        ) : null}
+
+        {route && !navigation ? (
           <>
             {route.alternatives.map((line, index) => (
               <Polyline

@@ -23,15 +23,49 @@ const TIMEOUT_MS = 6000;
 /** Rough urban driving speed for the offline estimate, m/s (~30 km/h). */
 const FALLBACK_SPEED = 8.3;
 
+/** One OSRM maneuver, kept as the router produced it so the client can build real turn guidance. */
+export interface RouteStep {
+  type: string;
+  modifier?: string;
+  exit?: number;
+  location: GeoPoint;
+  bearingBefore: number;
+  bearingAfter: number;
+  name: string;
+  ref?: string;
+  distanceMeters: number;
+  durationSeconds: number;
+  geometry: GeoPoint[];
+  /** Leg this step belongs to (0 for a direct route; one leg per stop otherwise). */
+  leg: number;
+}
+
 interface OsrmRoute {
   coordinates: GeoPoint[];
   distance: number;
   duration: number;
+  steps: RouteStep[];
+}
+
+type LngLat = [number, number];
+
+interface OsrmStep {
+  distance: number;
+  duration: number;
+  name?: string;
+  ref?: string;
+  geometry?: { coordinates: LngLat[] };
+  maneuver: { type: string; modifier?: string; exit?: number; location: LngLat; bearing_before?: number; bearing_after?: number };
 }
 
 interface OsrmResponse {
   code?: string;
-  routes?: { distance: number; duration: number; geometry: { coordinates: [number, number][] } }[];
+  routes?: {
+    distance: number;
+    duration: number;
+    geometry: { coordinates: LngLat[] };
+    legs?: { steps?: OsrmStep[] }[];
+  }[];
 }
 
 interface OsrmNearestResponse {
@@ -43,25 +77,61 @@ interface RouteOptions {
   mode?: 'checkpoint-aware' | 'fastest';
   snapDestination?: boolean;
   maxAlternatives?: number;
+  /** Include OSRM turn-by-turn steps (navigation). */
+  steps?: boolean;
+  /** Direction of travel at the origin, degrees from north. Stops a reroute starting against traffic. */
+  originBearing?: number;
+  /** Intermediate stops visited in order before the destination. */
+  via?: GeoPoint[];
 }
 
 /** Geometry is cached per origin/destination; scoring is redone on every call. */
 const cache = new Map<string, {routes:OsrmRoute[];expires:number}>();
 
-const keyOf = (from: GeoPoint, to: GeoPoint) =>
-  [from.latitude, from.longitude, to.latitude, to.longitude].map((n) => n.toFixed(4)).join(',');
+const toPoint = ([longitude, latitude]: LngLat): GeoPoint => ({ latitude, longitude });
 
-async function fetchRoutes(from: GeoPoint, to: GeoPoint): Promise<OsrmRoute[]> {
-  const key = keyOf(from, to);
+const keyOf = (points: GeoPoint[], bearing?: number) =>
+  points.flatMap((p) => [p.latitude, p.longitude]).map((n) => n.toFixed(5)).join(',') +
+  (bearing === undefined ? '' : `@${Math.round(bearing)}`);
+
+/** Bearing tolerance OSRM may deviate from the requested heading at the origin. */
+const BEARING_RANGE = 60;
+
+function stepsOf(legs: NonNullable<OsrmResponse['routes']>[number]['legs']): RouteStep[] {
+  return (legs ?? []).flatMap((leg, legIndex) =>
+    (leg.steps ?? []).map((step) => ({
+      type: step.maneuver.type,
+      modifier: step.maneuver.modifier,
+      exit: step.maneuver.exit,
+      location: toPoint(step.maneuver.location),
+      bearingBefore: step.maneuver.bearing_before ?? 0,
+      bearingAfter: step.maneuver.bearing_after ?? 0,
+      name: step.name ?? '',
+      ref: step.ref || undefined,
+      distanceMeters: step.distance,
+      durationSeconds: step.duration,
+      geometry: (step.geometry?.coordinates ?? []).map(toPoint),
+      leg: legIndex,
+    })),
+  );
+}
+
+async function fetchRoutes(points: GeoPoint[], bearing?: number): Promise<OsrmRoute[]> {
+  const key = keyOf(points, bearing);
   const hit = cache.get(key);
   if (hit && hit.expires>Date.now()) return hit.routes;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
+    const coordinates = points.map((p) => `${p.longitude},${p.latitude}`).join(';');
+    // OSRM only returns alternatives for two-point routes.
+    const bearings = bearing === undefined
+      ? ''
+      : `&bearings=${Math.round(((bearing % 360) + 360) % 360)},${BEARING_RANGE}${';'.repeat(points.length - 1)}`;
     const url =
-      `${OSRM}/route/v1/driving/${from.longitude},${from.latitude};${to.longitude},${to.latitude}` +
-      '?alternatives=true&overview=full&geometries=geojson';
+      `${OSRM}/route/v1/driving/${coordinates}` +
+      `?alternatives=${points.length === 2}&overview=full&geometries=geojson&steps=true${bearings}`;
     const response = await fetch(url, { signal: controller.signal });
     const json = (await response.json()) as OsrmResponse;
     if (json.code !== 'Ok' || !json.routes?.length) return [];
@@ -69,7 +139,8 @@ async function fetchRoutes(from: GeoPoint, to: GeoPoint): Promise<OsrmRoute[]> {
     const routes = json.routes.map((route) => ({
       distance: route.distance,
       duration: route.duration,
-      coordinates: route.geometry.coordinates.map(([longitude, latitude]) => ({ latitude, longitude })),
+      coordinates: route.geometry.coordinates.map(toPoint),
+      steps: stepsOf(route.legs),
     }));
     if(cache.size>500)cache.clear();
     cache.set(key, {routes,expires:Date.now()+60000});
@@ -121,14 +192,20 @@ const worstOf = (closures: RouteClosure[]) =>
 export const routingService = {
   async getRoute(from: GeoPoint, to: GeoPoint, options: RouteOptions = {}) {
     const destination = options.snapDestination ? await snapToDrivableRoad(to) : to;
+    const via = options.via ?? [];
+    const fetched = await fetchRoutes([from, ...via, destination], options.originBearing);
+    // A heading hint can make OSRM fail when the car sits on an unmapped lot; retry without it.
+    const routesPromise = fetched.length || options.originBearing === undefined
+      ? Promise.resolve(fetched)
+      : fetchRoutes([from, ...via, destination]);
     const [routes, states] = await Promise.all([
-      fetchRoutes(from, destination),
+      routesPromise,
       options.mode === 'fastest' ? Promise.resolve([] as CheckpointState[]) : checkpoints(),
     ]);
 
     if (!routes.length) {
-      const line = [from, destination];
-      const distance = distanceMeters(from, destination);
+      const line = [from, ...via, destination];
+      const distance = line.slice(1).reduce((sum, point, index) => sum + distanceMeters(line[index]!, point), 0);
       const closures = closuresNear(line, states);
       return {
         coordinates: line,
@@ -156,11 +233,12 @@ export const routingService = {
 
     const best = scored[0]!;
     const alternatives = scored.slice(1, 1 + (options.maxAlternatives ?? scored.length));
-    const traffic = await enrichTraffic(from, destination);
+    const traffic = via.length ? undefined : await enrichTraffic(from, destination);
     return {
       coordinates: best.coordinates,
       distanceMeters: Math.round(best.distance),
       durationSeconds: Math.round(best.duration),
+      ...(options.steps ? { steps: best.steps } : {}),
       ...(traffic ?? {}),
       penaltySeconds: best.penalty,
       closuresOnRoute: best.closures,
@@ -173,6 +251,7 @@ export const routingService = {
         coordinates: route.coordinates,
         distanceMeters: Math.round(route.distance),
         durationSeconds: Math.round(route.duration),
+        ...(options.steps ? { steps: route.steps } : {}),
       })),
       source: 'osrm',
       snappedDestination: destination,

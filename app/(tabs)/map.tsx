@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Platform, View } from 'react-native';
+import { BackHandler, Linking, Platform, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 
 import { Reveal } from '@/components/ui';
 import { MapSurface } from '@/components/map/MapSurface';
-import type { MapCheckpoint, MapRoute, MapSurfaceHandle } from '@/components/map/types';
+import type { MapCheckpoint, MapNavigation, MapRoute, MapSurfaceHandle } from '@/components/map/types';
+import { NavigationOverlay } from '@/components/map/navigation/NavigationOverlay';
+import { useTurnByTurnNavigation } from '@/hooks/useTurnByTurnNavigation';
+import { splitLine } from '@/utils/navigation/geometry';
 import { MapTopBar } from '@/components/map/MapTopBar';
 import { MapControlRail } from '@/components/map/MapControlRail';
 import { NearbyParkingPanel } from '@/components/map/NearbyParkingPanel';
@@ -73,6 +76,8 @@ const FASTEST_PARKING_ROUTE = {
   mode: 'fastest',
   snapDestination: true,
   maxAlternatives: 2,
+  // Turn-by-turn steps let navigation start on the route already shown.
+  steps: true,
 } as const;
 
 type TripNeedsMode = 'idle' | 'choosing' | 'parking' | 'route';
@@ -538,6 +543,7 @@ export default function MapScreen() {
       coordinates: selectedAlternative.coordinates,
       distanceMeters: selectedAlternative.distanceMeters,
       durationSeconds: selectedAlternative.durationSeconds,
+      steps: selectedAlternative.steps,
       penaltySeconds: 0,
       closuresOnRoute: [],
       trafficSegments: undefined,
@@ -1051,6 +1057,71 @@ export default function MapScreen() {
     void Linking.openURL(url).catch(() => undefined);
   }, []);
 
+  // ---- Turn-by-turn navigation --------------------------------------------
+  const navigation = useTurnByTurnNavigation(locale);
+  const navState = navigation.state;
+  const navActive = navState.status !== 'idle';
+  const navTargetRef = useRef<RouteDestination | undefined>(undefined);
+  const navDestination = navTargetRef.current;
+  const navDestinationName = navDestination
+    ? locale === 'ar' && navDestination.type !== 'ev_station' ? navDestination.nameAr ?? navDestination.name : navDestination.name
+    : '';
+
+  const startNavigation = useCallback(() => {
+    if (!routeTarget) return;
+    haptics.medium();
+    navTargetRef.current = routeTarget;
+    setRouteDetailsExpanded(false);
+    setEntryMenuOpen(false);
+    const needsRoute = activeRouteNeedsPlan && routeNeedsDisplayMode === 'needs' ? activeRouteNeedsPlan : undefined;
+    navigation.start({
+      destination: routeTarget.location,
+      name: routeTarget.name,
+      via: needsRoute?.stops.map((stop) => stop.place.location),
+      initialRoute: needsRoute ? undefined : displayedRoute,
+      routeOptions: { mode: FASTEST_PARKING_ROUTE.mode, snapDestination: FASTEST_PARKING_ROUTE.snapDestination },
+    });
+  }, [activeRouteNeedsPlan, displayedRoute, navigation, routeNeedsDisplayMode, routeTarget]);
+
+  // Android back ends navigation instead of leaving the screen mid-drive.
+  useEffect(() => {
+    if (!navActive) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      navigation.stop();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [navActive, navigation.stop]);
+
+  // The arrow turns the short way round (359° → 1° is +2°, not −358°).
+  const displayHeadingRef = useRef(0);
+  const mapNavigation = useMemo<MapNavigation | undefined>(() => {
+    const navRoute = navState.route;
+    const fix = navState.lastGoodFix ?? navState.lastFix;
+    if (!navActive || !fix) return undefined;
+    const progress = navState.progress;
+    const onRoute = navRoute && progress && progress.offRoute <= 30 && navState.status !== 'arrived';
+    const split = navRoute && progress ? splitLine(navRoute.line, navRoute.cumulative, progress.along) : undefined;
+    const rawHeading = onRoute ? progress.routeBearing : navState.heading;
+    if (rawHeading !== undefined) {
+      const previous = displayHeadingRef.current;
+      const delta = ((rawHeading - previous + 540) % 360) - 180;
+      displayHeadingRef.current = previous + delta;
+    }
+    return {
+      position: onRoute ? progress.snapped : fix.point,
+      heading: displayHeadingRef.current,
+      accuracy: fix.accuracy ?? undefined,
+      traveled: split?.traveled ?? [],
+      remaining: split?.remaining ?? [],
+      destination: navRoute?.destination ?? navTargetRef.current?.location ?? fix.point,
+      follow: navigation.following,
+      padding: { top: insets.top + 170, bottom: insets.bottom + 200 },
+    };
+  }, [navActive, navState.route, navState.progress, navState.lastGoodFix, navState.lastFix, navState.heading, navState.status, navigation.following, insets.top, insets.bottom]);
+  const stopFollowing = navigation.setFollowing;
+  const onUserPan = useCallback(() => stopFollowing(false), [stopFollowing]);
+
   const selectEvStation = useCallback((station: EvChargingStation) => {
     setSelectedZoneId(undefined);
     setSelectedReport(undefined);
@@ -1081,6 +1152,8 @@ export default function MapScreen() {
     }
   }, [selectedZoneId, selectedReport, reportStep, reportLocationPicking, layersSheetOpen, vehicleSheetOpen, codeSheetOpen, evFiltersOpen, ev.select, carServices.select, tourismPlaces.select]);
 
+  const hidePins = routeNeedsVisible || navActive;
+
   return (
     <View style={{ flex: 1, overflow: 'hidden', backgroundColor: colors.background }}>
       <StatusBar style="dark" />
@@ -1088,23 +1161,23 @@ export default function MapScreen() {
       <MapSurface
         ref={mapRef}
         region={region}
-        evStations={!routeNeedsVisible && evActive ? ev.stations : []}
-        selectedEvStationId={!routeNeedsVisible && evActive ? ev.selectedStationId : undefined}
+        evStations={!hidePins && evActive ? ev.stations : []}
+        selectedEvStationId={!hidePins && evActive ? ev.selectedStationId : undefined}
         onSelectEvStation={selectEvStation}
-        carServices={!routeNeedsVisible && carServicesActive ? carServices.services : []}
-        activeCarServiceCategory={!routeNeedsVisible && carServicesActive ? carServiceCategory : undefined}
-        selectedCarServiceId={!routeNeedsVisible && carServicesActive ? carServices.selectedServiceId : undefined}
+        carServices={!hidePins && carServicesActive ? carServices.services : []}
+        activeCarServiceCategory={!hidePins && carServicesActive ? carServiceCategory : undefined}
+        selectedCarServiceId={!hidePins && carServicesActive ? carServices.selectedServiceId : undefined}
         onSelectCarService={selectCarService}
         carServiceAccessibilityLabel={carServiceAccessibilityLabel}
-        tourismPlaces={!routeNeedsVisible && tourismPlacesActive ? tourismPlaces.places : []}
-        selectedTourismPlaceId={!routeNeedsVisible && tourismPlacesActive ? tourismPlaces.selectedPlaceId : undefined}
+        tourismPlaces={!hidePins && tourismPlacesActive ? tourismPlaces.places : []}
+        selectedTourismPlaceId={!hidePins && tourismPlacesActive ? tourismPlaces.selectedPlaceId : undefined}
         onSelectTourismPlace={selectTourismPlace}
         tourismPlaceMarkerCategory={tourismPlaceMarkerCategory}
         tourismPlaceAccessibilityLabel={tourismPlaceAccessibilityLabel}
-        zones={!routeNeedsVisible && primaryMapCategory === 'parking' ? mapZones.map((item) => item.zone) : []}
-        selectedZoneId={!routeNeedsVisible && primaryMapCategory === 'parking' ? selectedZoneId ?? routeZone?.id : undefined}
-        parkingLocations={!routeNeedsVisible && primaryMapCategory === 'parking' ? ramallahParkingLocations : []}
-        selectedParkingLocationId={!routeNeedsVisible && primaryMapCategory === 'parking' ? selectedZoneId ?? routeZone?.id : undefined}
+        zones={!hidePins && primaryMapCategory === 'parking' ? mapZones.map((item) => item.zone) : []}
+        selectedZoneId={!hidePins && primaryMapCategory === 'parking' ? selectedZoneId ?? routeZone?.id : undefined}
+        parkingLocations={!hidePins && primaryMapCategory === 'parking' ? ramallahParkingLocations : []}
+        selectedParkingLocationId={!hidePins && primaryMapCategory === 'parking' ? selectedZoneId ?? routeZone?.id : undefined}
         onSelectParkingLocation={openParkingLocation}
         onSelectZone={openZone}
         onPressMap={handleMapPress}
@@ -1134,12 +1207,23 @@ export default function MapScreen() {
           setSelectedReport(report);
         }}
         reportDraft={reportLocationPicking && reportDraft.type && reportDraft.latitude !== undefined && reportDraft.longitude !== undefined ? { type: reportDraft.type, location: { latitude: reportDraft.latitude, longitude: reportDraft.longitude } } : undefined}
-        route={mapRoute}
-        landmark={selectedDestination ? { name: selectedDestination.name, location: selectedDestination.location } : undefined}
+        route={navActive ? undefined : mapRoute}
+        navigation={mapNavigation}
+        onUserPan={onUserPan}
+        landmark={!navActive && selectedDestination ? { name: selectedDestination.name, location: selectedDestination.location } : undefined}
         needStops={visibleNeedStops}
         style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
       />
 
+      {navActive ? (
+        <NavigationOverlay
+          nav={navigation}
+          destinationName={navDestinationName}
+          onDestinationAction={navDestination?.type === 'parking' ? () => startParking(navDestination.zone) : undefined}
+          destinationActionLabel={navDestination?.type === 'parking' ? t('zone.startParking') : undefined}
+        />
+      ) : (
+      <>
       <View
         pointerEvents="box-none"
         style={{
@@ -1258,6 +1342,7 @@ export default function MapScreen() {
             detailsExpanded={routeDetailsExpanded}
             onDetailsExpandedChange={setRouteDetailsExpanded}
             onClose={closeRoute}
+            onStartNavigation={startNavigation}
             onOpenMaps={() => openInMaps(routeTarget)}
             onStartParking={routeZone ? () => startParking(routeZone) : undefined}
             onOpenDestination={routeTarget.type === 'ev_station' ? () => {
@@ -1374,6 +1459,8 @@ export default function MapScreen() {
           </Reveal>
         ) : null}
       </View>
+      </>
+      )}
 
       <VehicleSelectorSheet
         visible={vehicleSheetOpen}

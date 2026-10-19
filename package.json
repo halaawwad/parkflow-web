@@ -9,7 +9,8 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "test:notifications": "vitest run --config vitest.notifications.config.ts",
-    "test:network": "vitest run --config vitest.network.config.ts"
+    "test:network": "vitest run --config vitest.network.config.ts",
+    "test:navigation": "vitest run --config vitest.navigation.config.ts"
   },
   "private": true,
   "dependencies": {

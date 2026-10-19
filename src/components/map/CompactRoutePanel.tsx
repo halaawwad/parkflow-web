@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Navigation, ShieldCheck, TriangleAlert, X } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Navigation, Navigation2, ShieldCheck, TriangleAlert, X } from 'lucide-react-native';
 import { ScrollView, View } from 'react-native';
 
 import { AppButton, AppText, IconButton, PressableScale } from '@/components/ui';
@@ -99,6 +99,8 @@ interface CompactRoutePanelProps {
   detailsExpanded: boolean;
   onDetailsExpandedChange: (expanded: boolean) => void;
   onClose: () => void;
+  /** Starts in-app turn-by-turn navigation. */
+  onStartNavigation?: () => void;
   onOpenMaps: () => void;
   onStartParking?: () => void;
   onOpenDestination?: () => void;
@@ -126,6 +128,7 @@ export function CompactRoutePanel({
   detailsExpanded,
   onDetailsExpandedChange,
   onClose,
+  onStartNavigation,
   onOpenMaps,
   onStartParking,
   onOpenDestination,
@@ -332,6 +335,17 @@ export function CompactRoutePanel({
             </ScrollView>
           ) : null}
         </>
+      ) : null}
+
+      {onStartNavigation ? (
+        <AppButton
+          testID="start-navigation"
+          label={t('nav.start')}
+          accessibilityHint={t('nav.startHint')}
+          size="md"
+          onPress={onStartNavigation}
+          icon={<Navigation2 size={18} color={colors.onBrand} strokeWidth={2.4} fill={colors.onBrand} />}
+        />
       ) : null}
 
       <View style={{ flexDirection: row, gap: spacing.sm }}>

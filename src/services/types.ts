@@ -26,6 +26,7 @@ import type {
   CreateRoadReportInput,
   CreateRoadReportResult,
   RouteResult,
+  RouteRequestOptions,
   Transaction,
   TransactionType,
   TrustSummary,
@@ -240,11 +241,7 @@ export interface RoutingService {
   getRoute(
     from: GeoPoint,
     to: GeoPoint,
-    options?: {
-      mode?: 'checkpoint-aware' | 'fastest';
-      snapDestination?: boolean;
-      maxAlternatives?: number;
-    },
+    options?: RouteRequestOptions,
   ): Promise<RouteResult>;
 }
 
