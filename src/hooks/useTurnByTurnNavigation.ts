@@ -7,8 +7,7 @@ import type { GeoPoint, RouteRequestOptions, RouteResult } from '@/types';
 import { AppError } from '@/utils/errors';
 import { distanceMeters } from '@/utils/geo';
 import { buildNavigationRoute } from '@/utils/navigation/maneuvers';
-import { actionPhrase, arrivedPhrase, maneuverInstruction, systemPhrases } from '@/utils/navigation/instructions';
-import type { NavigationRoute } from '@/utils/navigation/maneuvers';
+import { arrivedPhrase, maneuverInstruction, systemPhrases } from '@/utils/navigation/instructions';
 import {
   guidanceReliable,
   initialNavigationState,
@@ -18,7 +17,7 @@ import {
   type LocationFix,
   type NavigationState,
 } from '@/utils/navigation/session';
-import { followingManeuver, markSpoken, planAnnouncement } from '@/utils/navigation/voiceScheduler';
+import { markSpoken, planAnnouncement, routeSentences, upcomingSentences } from '@/utils/navigation/voiceScheduler';
 import { SpeechQueue, type SpeechQueueStatus } from '@/utils/navigation/speechQueue';
 import { chooseVoice, createNavigationVoice, keepScreenAwake, vibrateFor, type NavigationVoice, type VoiceChoice } from '@/utils/navigation/platform';
 import { useNavigationSessionStore } from '@/store/navigationSessionStore';
@@ -252,8 +251,28 @@ export function useTurnByTurnNavigation(locale: Locale) {
     const route = state.route;
     const voice = voiceEngineRef.current;
     if (!route || !voice?.available) return;
-    voice.prefetch(prefetchSentences(route, localeRef.current));
+    const lang = localeRef.current;
+    const arrival = route.maneuvers[route.maneuvers.length - 1];
+    voice.prefetch([
+      ...routeSentences(route, lang),
+      arrivedPhrase(arrival?.side, lang),
+      systemPhrases.rerouted(lang),
+      systemPhrases.weakSignal(lang),
+      systemPhrases.signalRestored(lang),
+    ]);
   }, [state.route]);
+
+  // Distance prompts depend on speed, so they are fetched just ahead of time:
+  // the next maneuver's likely "in … metres" lines and the "continue for …"
+  // line that follows it. The engine skips anything already cached.
+  const progressForPrefetch = state.progress;
+  const routeForPrefetch = state.route;
+  const speedForPrefetch = state.speed;
+  useEffect(() => {
+    const voice = voiceEngineRef.current;
+    if (!voice?.available || !routeForPrefetch || !progressForPrefetch) return;
+    voice.prefetch(upcomingSentences({ route: routeForPrefetch, progress: progressForPrefetch, speed: speedForPrefetch, locale: localeRef.current }));
+  }, [routeForPrefetch, progressForPrefetch, speedForPrefetch]);
 
   // ---- Voice, vibration and status announcements ------------------------
   const previous = useRef<NavigationState>(initialNavigationState);
@@ -398,17 +417,3 @@ export function useTurnByTurnNavigation(locale: Locale) {
 }
 
 export type TurnByTurnNavigation = ReturnType<typeof useTurnByTurnNavigation>;
-
-/** Sentences a route is certain or likely to need, in the order they will be spoken. */
-function prefetchSentences(route: NavigationRoute, locale: Locale): string[] {
-  const lang = locale;
-  const texts: string[] = [];
-  route.maneuvers.forEach((maneuver, index) => {
-    if (!maneuver.announce || maneuver.kind === 'arrive' || maneuver.kind === 'waypoint') return;
-    // Typical city speed decides whether a close follow-up is chained.
-    texts.push(actionPhrase(maneuver, lang, followingManeuver(route, index, 10)));
-  });
-  const arrival = route.maneuvers[route.maneuvers.length - 1];
-  texts.push(arrivedPhrase(arrival?.side, lang), systemPhrases.rerouted(lang), systemPhrases.weakSignal(lang));
-  return texts;
-}

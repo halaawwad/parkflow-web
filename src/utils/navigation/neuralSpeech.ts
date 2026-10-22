@@ -28,7 +28,10 @@ export interface NeuralSpeechOptions {
   release?: (source: string) => void;
   /** An error after which asking again is pointless (not configured, no access). */
   isPermanentError?: (error: unknown) => boolean;
+  /** Longest wait for natural audio before an urgent prompt uses the device voice. */
   waitMs?: number;
+  /** Same for routine prompts, which are spoken well ahead of the maneuver. */
+  routineWaitMs?: number;
   cacheLimit?: number;
   timers?: {
     setTimeout: (fn: () => void, ms: number) => unknown;
@@ -61,7 +64,8 @@ export function createNeuralSpeechEngine(options: NeuralSpeechOptions): NeuralSp
     release,
     isPermanentError = () => false,
     waitMs = 1200,
-    cacheLimit = 120,
+    routineWaitMs = 3500,
+    cacheLimit = 160,
     timers = {
       setTimeout: (fn, ms) => setTimeout(fn, ms),
       clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
@@ -136,7 +140,7 @@ export function createNeuralSpeechEngine(options: NeuralSpeechOptions): NeuralSp
       for (let i = 0; i < PREFETCH_CONCURRENCY; i++) void next();
     },
 
-    speak(text, callbacks) {
+    speak(text, callbacks, speakOptions) {
       const mine = ++token;
       clearWait();
       const useFallback = () => {
@@ -154,7 +158,7 @@ export function createNeuralSpeechEngine(options: NeuralSpeechOptions): NeuralSp
         if (settled) return;
         settled = true;
         useFallback();
-      }, waitMs);
+      }, speakOptions?.urgent === false ? routineWaitMs : waitMs);
       void load(text).then((source) => {
         if (settled || mine !== token) return;
         settled = true;

@@ -77,6 +77,21 @@ describe('natural navigation voice', () => {
     expect(played).toEqual(['audio:late']);
   });
 
+  it('waits longer for natural audio on routine prompts than on urgent ones', async () => {
+    const waits: number[] = [];
+    const engine = createNeuralSpeechEngine({
+      synthesize: () => new Promise(() => undefined),
+      fallback: { speak: () => undefined, stop: () => undefined },
+      player: { play: () => undefined, stop: () => undefined, isPlaying: () => false },
+      timers: { setTimeout: (_fn, ms) => waits.push(ms), clearTimeout: () => undefined },
+    });
+    const cb = { onDone: () => undefined, onStopped: () => undefined, onError: () => undefined };
+    engine.speak('Turn right.', cb, { urgent: true });
+    engine.speak('In 300 meters, turn right.', cb, { urgent: false });
+    expect(waits[0]).toBe(1200);
+    expect(waits[1]).toBe(3500);
+  });
+
   it('stops asking for the session when the service is not configured', async () => {
     const calls: string[] = [];
     const { engine, device } = setup({

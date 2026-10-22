@@ -14,6 +14,8 @@ export interface SpeechEngine {
   speak(
     text: string,
     callbacks: { onDone: () => void; onStopped: () => void; onError: (error: unknown) => void },
+    /** Urgent prompts ("Turn right") must start at once; routine ones may wait briefly for better audio. */
+    options?: { urgent?: boolean },
   ): void;
   stop(): void;
   /** Whether audio is still playing, when the platform can say synchronously. Lets the watchdog wait for slow voices. */
@@ -165,7 +167,7 @@ export class SpeechQueue {
           this.setStatus({ errors: this.status.errors + 1, blocked: this.status.blocked || isBlockedError(error) });
           this.finish(token);
         },
-      });
+      }, { urgent: (request.priority ?? 'normal') === 'high' });
     } catch (error) {
       this.setStatus({ errors: this.status.errors + 1, blocked: isBlockedError(error) });
       this.finish(token);

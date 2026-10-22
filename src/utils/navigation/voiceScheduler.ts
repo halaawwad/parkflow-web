@@ -104,3 +104,65 @@ export function planAnnouncement(input: {
   if (!has('continue') && !has('far')) return make('continue', continuePhrase(distance, locale));
   return undefined;
 }
+
+/**
+ * Prompts likely to be spoken in the next ~30 seconds, so natural-voice audio
+ * can be fetched before it is needed. Distance prompts are predicted from the
+ * windows above: a prompt fires on the first fix inside its window, so the
+ * spoken distance is the window edge minus up to two fixes of travel. The
+ * candidates are deduplicated after rounding, so this is a handful of short
+ * sentences, not one per metre.
+ */
+export function upcomingSentences(input: {
+  route: NavigationRoute;
+  progress: RouteProgress;
+  speed: number;
+  locale: GuidanceLocale;
+}): string[] {
+  const { route, progress, speed, locale } = input;
+  const maneuver = route.maneuvers[progress.nextIndex];
+  if (!maneuver || !maneuver.announce) return [];
+  const windows = announcementDistances(speed);
+  const step = Math.max(speed, 5);
+  const distance = progress.distanceToNext;
+  const terminal = maneuver.kind === 'arrive' || maneuver.kind === 'waypoint';
+  const out: string[] = [];
+  const near = (edge: number) => [edge, edge - step, edge - 2 * step].filter((d) => d > windows.now + 15);
+
+  if (!terminal) out.push(actionPhrase(maneuver, locale, followingManeuver(route, progress.nextIndex, speed)));
+  // The prompt that would fire at the current distance (fetched just before it is planned).
+  if (distance <= windows.prepare && distance - windows.now >= 15) out.push(approachPhrase(maneuver, distance, locale));
+  if (!terminal && distance <= windows.far && distance >= windows.prepare * 1.6) out.push(approachPhrase(maneuver, distance, locale));
+  if (distance <= windows.prepare + 300) near(windows.prepare).forEach((d) => out.push(approachPhrase(maneuver, d, locale)));
+  if (!terminal && distance <= windows.far + 400 && distance > windows.prepare * 1.6) {
+    near(windows.far).forEach((d) => out.push(approachPhrase(maneuver, d, locale)));
+  }
+
+  // Right after this maneuver the next one becomes current. Whatever is said
+  // first about it is spoken at (about) the gap between the two: a "continue
+  // for …" over a long stretch, or an "in … metres" warning when they are close.
+  const afterIndex = route.maneuvers.findIndex((m, i) => i > progress.nextIndex && m.announce);
+  const after = route.maneuvers[afterIndex];
+  if (after && distance <= windows.prepare + 300) {
+    const gap = after.along - maneuver.along;
+    const afterTerminal = after.kind === 'arrive' || after.kind === 'waypoint';
+    for (const d of [gap, gap - step, gap - 2 * step]) {
+      if (d <= windows.now + 15) continue;
+      if (d > windows.far) out.push(continuePhrase(d, locale));
+      else if (d <= windows.prepare) out.push(approachPhrase(after, d, locale));
+      else if (!afterTerminal && d >= windows.prepare * 1.6) out.push(approachPhrase(after, d, locale));
+    }
+  }
+  return [...new Set(out)];
+}
+
+/** Sentences a whole route is certain to need, known as soon as it is planned. */
+export function routeSentences(route: NavigationRoute, locale: GuidanceLocale): string[] {
+  const out: string[] = [];
+  route.maneuvers.forEach((maneuver, index) => {
+    if (!maneuver.announce || maneuver.kind === 'arrive' || maneuver.kind === 'waypoint') return;
+    // Typical city speed decides whether a close follow-up is chained.
+    out.push(actionPhrase(maneuver, locale, followingManeuver(route, index, 10)));
+  });
+  return out;
+}

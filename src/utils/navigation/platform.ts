@@ -32,10 +32,14 @@ export async function chooseVoice(locale: GuidanceLocale): Promise<VoiceChoice> 
     const candidates = voices.filter((voice) => voice.language?.toLowerCase().replace('_', '-').startsWith(prefix));
     if (!candidates.length) return { language: LANGUAGE[locale], available: false };
     const preferred = locale === 'ar' ? ['ar-sa', 'ar-jo', 'ar-ps', 'ar-ae', 'ar-eg'] : ['en-us', 'en-gb'];
+    // Natural/neural voices (Edge "Online (Natural)", Google, Apple premium) sound far
+    // less robotic than legacy desktop voices, so they win regardless of dialect.
+    const natural = /natural|neural|online|google|premium|enhanced|siri/i;
     const score = (voice: Speech.Voice) => {
       const lang = voice.language.toLowerCase().replace('_', '-');
       const rank = preferred.indexOf(lang);
-      return (voice.quality === Speech.VoiceQuality.Enhanced ? 0 : 10) + (rank === -1 ? 5 : rank);
+      const quality = voice.quality === Speech.VoiceQuality.Enhanced || natural.test(voice.name ?? '') ? 0 : 20;
+      return quality + (rank === -1 ? 5 : rank);
     };
     const best = [...candidates].sort((a, b) => score(a) - score(b))[0]!;
     return { language: best.language, voice: best.identifier, available: true };
