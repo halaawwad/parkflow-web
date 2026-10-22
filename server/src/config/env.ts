@@ -23,6 +23,8 @@ export const env = z.object({
  S3_ENDPOINT:z.string().url(), S3_REGION:z.string().default('us-east-1'), S3_BUCKET:z.string(), S3_ACCESS_KEY:z.string(), S3_SECRET_KEY:z.string(),
  // Leave empty to keep crash calling off. Digits with an optional leading +.
  EMERGENCY_CALL_NUMBER:z.string().trim().regex(/^\+?[0-9]{2,15}$/).optional().or(z.literal('')), EMERGENCY_COUNTDOWN_SECONDS:z.coerce.number().int().min(5).max(60).default(15),
+ // SmartGate plate recognition service (server/alpr). Unset keeps the default local address.
+ ALPR_URL:z.string().url().default('http://127.0.0.1:8090'), ALPR_TOKEN:optional,
  FIREBASE_PROJECT_ID:optional,FIREBASE_CLIENT_EMAIL:optional,FIREBASE_PRIVATE_KEY:optional,EXPO_PUSH_ACCESS_TOKEN:optional,
 }).parse(process.env);
 if(env.NODE_ENV==='production'&&env.DEV_SKIP_EMAIL_OTP) {

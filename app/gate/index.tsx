@@ -8,30 +8,25 @@ import {
   AppHeader,
   AppText,
   Card,
-  Divider,
   InlineNotice,
   Screen,
   Segmented,
-  SkeletonGroup,
-  StatusBadge,
   TextField,
 } from '@/components/ui';
 import { GateZonePicker } from '@/components/domain/GateZonePicker';
+import { GateVisitList } from '@/components/domain/GateVisitList';
 import { useGateScan, useGateZones, useSaveRules, useVisits } from '@/hooks/useGates';
 import { useLocale } from '@/hooks/useLocale';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/spacing';
 import { radius } from '@/theme/radius';
 import { formatMoney } from '@/utils/money';
-import { formatTime } from '@/utils/time';
 import { errorMessage } from '@/utils/errors';
 import { haptics } from '@/utils/haptics';
 import { shekelsToMinor } from '@/utils/sharing';
-import type { BadgeTone } from '@/components/ui/StatusBadge';
-import type { GateZone, ParkingVisit, VisitStatus } from '@/types';
+import type { GateZone } from '@/types';
 
 type Direction = 'entry' | 'exit';
-const STATUS_TONE: Record<VisitStatus, BadgeTone> = { covered: 'success', grace: 'warning', overstaying: 'danger', unregistered: 'neutral', left: 'neutral' };
 
 /**
  * Runs on a phone or tablet at the lot gate. It scans each driver's gate pass,
@@ -54,7 +49,7 @@ export default function GateModeScreen() {
           <>
             <Scanner zone={zone} />
             <RulesCard zone={zone} />
-            <VisitList visits={visits.data} loading={visits.isPending} />
+            <GateVisitList visits={visits.data} loading={visits.isPending} />
           </>
         ) : null}
       </View>
@@ -161,42 +156,5 @@ function RulesCard({ zone }: { zone: GateZone }) {
         <AppButton label={t('common.edit')} size="sm" variant="secondary" onPress={() => setOpen(true)} />
       )}
     </Card>
-  );
-}
-
-function VisitList({ visits, loading }: { visits?: ParkingVisit[]; loading: boolean }) {
-  const { t, row, dateLocale } = useLocale();
-  if (loading) return <SkeletonGroup count={3} height={64} />;
-  const inside = (visits ?? []).filter((v) => v.status !== 'left');
-  const left = (visits ?? []).filter((v) => v.status === 'left');
-  const line = (v: ParkingVisit) => [
-    `${t('gate.entered')} ${formatTime(v.enteredAt, dateLocale)}`,
-    v.exitedAt ? `${t('gate.left')} ${formatTime(v.exitedAt, dateLocale)}` : undefined,
-    v.paidUntil && v.status !== 'left' ? `${t('gate.paidUntil')} ${formatTime(v.paidUntil, dateLocale)}` : undefined,
-    v.violationCount ? t('gate.violationsLine', { count: v.violationCount, total: formatMoney(v.violationTotal) }) : undefined,
-  ].filter(Boolean).join(' · ');
-  const list = (items: ParkingVisit[]) => items.map((v, index) => (
-    <View key={v.id} style={{ gap: spacing.xs }}>
-      {index ? <Divider /> : null}
-      <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm, paddingTop: index ? spacing.sm : 0 }}>
-        <AppText variant="titleLg" numeric style={{ flex: 1 }}>{v.plateNumber}</AppText>
-        <StatusBadge label={t(`gate.status.${v.status}`)} tone={STATUS_TONE[v.status]} size="sm" />
-      </View>
-      <AppText variant="caption" color="textSecondary">{line(v)}</AppText>
-    </View>
-  ));
-  return (
-    <>
-      <Card padding="lg" style={{ gap: spacing.sm }}>
-        <AppText variant="title">{t('gate.inside', { count: inside.length })}</AppText>
-        {inside.length ? list(inside) : <AppText variant="bodySm" color="textSecondary">{t('gate.nobodyInside')}</AppText>}
-      </Card>
-      {left.length ? (
-        <Card padding="lg" tone="outline" style={{ gap: spacing.sm }}>
-          <AppText variant="title">{t('gate.recentlyLeft')}</AppText>
-          {list(left)}
-        </Card>
-      ) : null}
-    </>
   );
 }

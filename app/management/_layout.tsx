@@ -28,6 +28,7 @@ export default function ManagementLayout() {
       <View style={{ flexDirection: row, flexWrap: 'wrap', gap: spacing.sm }}>
         {user.role === 'ADMIN' ? <AppButton label={ar ? 'لوحة الإدارة' : 'Admin dashboard'} size="sm" fullWidth={false} variant={pathname === '/management' ? 'secondary' : 'ghost'} onPress={() => router.replace('/management')} /> : null}
         <AppButton label={ar ? (user.role === 'ADMIN' ? 'المواقف والمؤسسات' : 'مواقفي') : (user.role === 'ADMIN' ? 'Parking & organizations' : 'My parking')} size="sm" fullWidth={false} variant={pathname.includes('/zones') ? 'secondary' : 'ghost'} onPress={() => router.replace('/management/zones')} />
+        {user.role === 'ADMIN' || user.role === 'PARKING_OPERATOR' ? <AppButton label="SmartGate" size="sm" fullWidth={false} variant={pathname.includes('/smartgate')?'secondary':'ghost'} onPress={()=>router.replace('/management/smartgate')}/> : null}
         {access.data?.canViewAnalytics ? <AppButton label={ar?'التحليلات':'Analytics'} size="sm" fullWidth={false} variant={pathname.includes('/analytics')?'secondary':'ghost'} onPress={()=>router.replace('/management/analytics')}/> : null}
         {access.data?.canManageStaff ? <AppButton label={ar?'الموظفون':'Staff'} size="sm" fullWidth={false} variant={pathname.includes('/staff')?'secondary':'ghost'} onPress={()=>router.replace('/management/staff')}/> : null}
       </View>

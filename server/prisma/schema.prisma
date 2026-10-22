@@ -237,16 +237,18 @@ model Vehicle {
 }
 
 model UserVehicle {
-  id         String    @id @default(uuid())
-  userId     String
-  vehicleId  String
-  user       User      @relation(fields: [userId], references: [id])
-  vehicle    Vehicle   @relation(fields: [vehicleId], references: [id])
-  role       String    @default("owner")
-  nickname   String?
-  isDefault  Boolean   @default(false)
-  linkedAt   DateTime  @default(now())
-  unlinkedAt DateTime?
+  id              String    @id @default(uuid())
+  userId          String
+  vehicleId       String
+  user            User      @relation(fields: [userId], references: [id])
+  vehicle         Vehicle   @relation(fields: [vehicleId], references: [id])
+  role            String    @default("owner")
+  nickname        String?
+  isDefault       Boolean   @default(false)
+  /// The driver agreed that a SmartGate plate read starts and bills pay-as-you-go parking for this vehicle.
+  autoGateParking Boolean   @default(false)
+  linkedAt        DateTime  @default(now())
+  unlinkedAt      DateTime?
 
   @@unique([userId, vehicleId])
   @@index([vehicleId, unlinkedAt])
@@ -254,10 +256,10 @@ model UserVehicle {
 }
 
 model ParkingOperator {
-  id        String         @id @default(uuid())
+  id        String          @id @default(uuid())
   name      String
-  type      String         @default("municipality")
-  createdAt DateTime       @default(now())
+  type      String          @default("municipality")
+  createdAt DateTime        @default(now())
   users     OperatorUser[]
   staff     OperatorStaff[]
   zones     ParkingZone[]
@@ -337,6 +339,7 @@ model ParkingZone {
   overstayMaxPerStay    Int                    @default(20000)
   visits                ParkingVisit[]
   gateDevices           GateDevice[]
+  gateEvents            GateEvent[]
 
   @@index([latitude, longitude])
   @@map("parking_zones")
@@ -1222,13 +1225,47 @@ model GateDevice {
   name          String
   /// camera | qr_scanner
   kind          String
+  /// entry | exit for a SmartGate camera that sends frames; exits only ever come from an exit camera.
+  direction     String?
   keyHash       String      @unique
   active        Boolean     @default(true)
   lastSeenAt    DateTime?
+  /// Last complete plate read and last problem, for the owner's live dashboard.
+  lastPlate     String?
+  lastError     String?
+  lastErrorAt   DateTime?
   createdAt     DateTime    @default(now())
+  events        GateEvent[]
 
   @@index([parkingZoneId])
   @@map("gate_devices")
+}
+
+/// What an automatic SmartGate camera did with a plate: an entry or exit, a suppressed
+/// duplicate, or a reading it was not sure of, kept for the owner to review later.
+model GateEvent {
+  id            String      @id @default(uuid())
+  parkingZoneId String
+  zone          ParkingZone @relation(fields: [parkingZoneId], references: [id])
+  deviceId      String?
+  device        GateDevice? @relation(fields: [deviceId], references: [id])
+  /// entry | exit
+  direction     String
+  /// The accepted plate, digits only. Null when nothing was read completely.
+  plateNumber   String?
+  /// The best uncertain reading, shown for review only.
+  reading       String?
+  /// entry | exit | already_inside | not_inside | too_soon | review | error
+  outcome       String
+  confidence    Float?
+  frames        Int         @default(0)
+  visitId       String?
+  message       String?
+  reviewedAt    DateTime?
+  createdAt     DateTime    @default(now())
+
+  @@index([parkingZoneId, createdAt])
+  @@map("gate_events")
 }
 
 enum CrashEventOutcome {
@@ -1240,18 +1277,18 @@ enum CrashEventOutcome {
 
 /// A possible crash detected on the driver's phone, and what happened next.
 model CrashEvent {
-  id          String            @id @default(uuid())
-  userId      String
-  user        User              @relation(fields: [userId], references: [id])
-  detectedAt  DateTime
-  latitude    Float?
-  longitude   Float?
-  speedKmh    Float?
-  peakG       Float
-  rotationDeg Float?
-  outcome     CrashEventOutcome
+  id           String            @id @default(uuid())
+  userId       String
+  user         User              @relation(fields: [userId], references: [id])
+  detectedAt   DateTime
+  latitude     Float?
+  longitude    Float?
+  speedKmh     Float?
+  peakG        Float
+  rotationDeg  Float?
+  outcome      CrashEventOutcome
   calledNumber String?
-  createdAt   DateTime          @default(now())
+  createdAt    DateTime          @default(now())
 
   @@index([userId, detectedAt])
   @@map("crash_events")
@@ -1259,14 +1296,14 @@ model CrashEvent {
 
 // Staff assignments never grant owner membership or a global role.
 model OperatorStaff {
-  operatorId           String
-  userId               String
-  canViewAnalytics     Boolean @default(false)
-  canUpdateAvailability Boolean @default(false)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-  operator ParkingOperator @relation(fields: [operatorId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  operatorId            String
+  userId                String
+  canViewAnalytics      Boolean         @default(false)
+  canUpdateAvailability Boolean         @default(false)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  operator              ParkingOperator @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+  user                  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([operatorId, userId])
   @@index([userId])

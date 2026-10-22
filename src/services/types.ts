@@ -86,6 +86,7 @@ export interface VehicleService {
   /** Unlinks from the account. History and violations are never deleted. */
   unlink(userId: string, vehicleId: string): Promise<void>;
   permits(vehicleId: string): Promise<Permit[]>;
+  setAutoGateParking(vehicleId: string, enabled: boolean): Promise<UserVehicleView>;
 }
 
 export interface ZoneQuery {

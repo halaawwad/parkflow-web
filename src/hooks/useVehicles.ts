@@ -116,6 +116,19 @@ export function useSetDefaultVehicle() {
   });
 }
 
+/** SmartGate consent: a plate read at a gate starts and bills pay-as-you-go parking. */
+export function useSetAutoGateParking() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ vehicleId, enabled }: { vehicleId: string; enabled: boolean }) =>
+      services.vehicles.setAutoGateParking(vehicleId, enabled),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+    },
+  });
+}
+
 export function useUnlinkVehicle() {
   const userId = useUserId();
   const queryClient = useQueryClient();

@@ -55,6 +55,7 @@ services:
       DATABASE_URL: postgresql://parkflow:${POSTGRES_PASSWORD:-local-parkflow}@postgres:5432/parkflow
       REDIS_URL: redis://redis:6379
       S3_ENDPOINT: http://minio:9000
+      ALPR_URL: http://alpr:8090
     ports:
       - "4000:4000"
     command: sh -c "npx prisma migrate deploy && node dist/src/server.js"
@@ -65,6 +66,13 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+    restart: unless-stopped
+
+  # SmartGate plate recognition (pretrained FastALPR models). See alpr/README.md.
+  alpr:
+    build: ./alpr
+    ports:
+      - "127.0.0.1:8090:8090"
     restart: unless-stopped
 
   worker:

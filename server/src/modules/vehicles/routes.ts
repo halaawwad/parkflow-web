@@ -19,4 +19,5 @@ route('get','/vehicles/:id',empty,r=>vehicles.get(user(r),param(r)));
 route('patch','/vehicles/:id',vehicle.partial(),(r,b)=>vehicles.update(user(r),param(r),b));
 route('delete','/vehicles/:id',empty,r=>vehicles.unlink(user(r),param(r)));
 route('patch','/vehicles/:id/default',empty,r=>vehicles.setDefault(user(r),param(r)));
+route('patch','/vehicles/:id/smart-gate',z.object({autoParking:z.boolean()}).strict(),(r,b)=>vehicles.setAutoGateParking(user(r),param(r),b.autoParking));
 route('get','/vehicles/:id/permits',empty,r=>vehicles.permits(user(r),param(r)));

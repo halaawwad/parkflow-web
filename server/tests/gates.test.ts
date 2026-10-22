@@ -1,4 +1,5 @@
-import { beforeEach, describe, it, expect } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, it, expect, vi } from 'vitest';
+import { createServer, type Server } from 'node:http';
 import request from 'supertest';
 import { randomUUID } from 'node:crypto';
 import jwt from 'jsonwebtoken';
@@ -7,6 +8,10 @@ import { db, atomic } from '../src/database/client';
 import { redis } from '../src/database/redis';
 import { env } from '../src/config/env';
 import * as gates from '../src/modules/gates/service';
+import { toReading, type PlateReading } from '../src/modules/gates/recognition';
+import * as automatic from '../src/modules/gates/automation';
+import * as auth from '../src/modules/auth/service';
+import { emailProvider } from '../src/providers/email';
 import * as sessions from '../src/modules/sessions/service';
 import { post } from '../src/modules/wallet/ledger';
 
@@ -164,6 +169,98 @@ describe('plate cameras and the overstay checker', () => {
   });
 });
 
+describe('SmartGate', () => {
+  const latestSnapshot = () => db.availabilitySnapshot.findFirstOrThrow({ where: { zoneId: 'city-lot' }, orderBy: { recordedAt: 'desc' } });
+
+  it('counts registered and unregistered cars alike, once per stay', async () => {
+    await db.parkingZone.update({ where: { id: 'city-lot' }, data: { capacity: 20 } });
+    for (let n = 0; n < 12; n++) await gates.staffEnter(operator, { zoneId: 'city-lot', plate: `900000${n}` });
+    expect(await gates.occupancy(operator, 'city-lot')).toMatchObject({ inside: 12, available: 8, status: 'available' });
+
+    expect((await gates.staffEnter(operator, { zoneId: 'city-lot', plate: '1234567' })).occupancy.inside).toBe(13);
+    const stranger = await gates.staffEnter(operator, { zoneId: 'city-lot', plate: '5550001' });
+    expect(stranger).toMatchObject({ registered: false, status: 'unregistered', alreadyInside: false, occupancy: { inside: 14, unregisteredInside: 13 } });
+    // The camera seeing it again is the same stay.
+    expect(await gates.staffEnter(operator, { zoneId: 'city-lot', plate: '5550001' })).toMatchObject({ id: stranger.id, alreadyInside: true, occupancy: { inside: 14 } });
+
+    expect((await gates.lookup(operator, 'city-lot', '5550001')).suggested).toBe('exit');
+    expect((await gates.staffExit(operator, { zoneId: 'city-lot', plate: '5550001' })).occupancy.inside).toBe(13);
+    await expect(gates.staffExit(operator, { zoneId: 'city-lot', plate: '5550001' })).rejects.toMatchObject({ code: 'NOT_INSIDE' });
+    expect((await gates.staffExit(operator, { zoneId: 'city-lot', plate: '1234567' })).occupancy.inside).toBe(12);
+
+    expect(await latestSnapshot()).toMatchObject({ source: 'ANPR', availability: 'available', occupiedSpaces: 12, availableSpaces: 8 });
+    expect(await db.walletTransaction.count({ where: { wallet: { userId: driver }, type: 'parking_payment' } })).toBe(0);
+    const history = await gates.visits(operator, 'city-lot');
+    expect(history.find((v) => v.plateNumber === '5550001')).toMatchObject({ status: 'left', registered: false });
+  });
+
+  it('shows the lot as limited and then full as it fills up', async () => {
+    await db.parkingZone.update({ where: { id: 'city-lot' }, data: { capacity: 5 } });
+    for (let n = 0; n < 4; n++) await gates.staffEnter(operator, { zoneId: 'city-lot', plate: `800000${n}` });
+    expect((await latestSnapshot()).availability).toBe('limited');
+    await gates.staffEnter(operator, { zoneId: 'city-lot', plate: '8000009' });
+    expect(await gates.occupancy(operator, 'city-lot')).toMatchObject({ inside: 5, available: 0, status: 'full' });
+  });
+
+  it('starts and bills parking only for drivers who authorized it', async () => {
+    await db.userVehicle.updateMany({ where: { vehicleId }, data: { autoGateParking: true } });
+    const entered = await gates.staffEnter(operator, { zoneId: 'city-lot', plate: '1234567' });
+    expect(entered.status).toBe('covered');
+    const session = await db.parkingSession.findUniqueOrThrow({ where: { id: entered.sessionId! } });
+    expect(session).toMatchObject({ userId: driver, status: 'ACTIVE', parkingMode: 'start_stop' });
+    await db.parkingSession.update({ where: { id: session.id }, data: { startedAt: minutes(59) } });
+    const left = await gates.staffExit(operator, { zoneId: 'city-lot', plate: '1234567' });
+    expect(left.charge).toMatchObject({ sessionId: session.id, amount: 600, paymentStatus: 'paid' });
+    expect((await db.wallet.findUniqueOrThrow({ where: { userId: driver } })).balance).toBe(10000 - 600);
+  });
+
+  it('keeps the ANPR session exception to consented SmartGate entries at the operator\'s own lots', async () => {
+    // A lot whose app check-in methods do not include ANPR.
+    await db.parkingZone.update({ where: { id: 'city-lot' }, data: { supportedEntryMethods: ['gps', 'qr'] } });
+    // What POST /parking/sessions calls: the lot's entry methods still apply.
+    await expect(sessions.start(driver, { vehicleId, zoneId: 'city-lot', mode: 'start_stop', entryMethod: 'anpr' }, randomUUID()))
+      .rejects.toMatchObject({ code: 'INVALID_ENTRY_METHOD' });
+    // No consent: the gate records the entry but starts nothing.
+    const first = await gates.staffEnter(operator, { zoneId: 'city-lot', plate: '1234567' });
+    expect(first.sessionId).toBeUndefined();
+    await gates.staffExit(operator, { zoneId: 'city-lot', plate: '1234567' });
+    // Consent given: the SmartGate entry starts parking even though the lot lists no ANPR check-in.
+    await db.userVehicle.updateMany({ where: { vehicleId }, data: { autoGateParking: true } });
+    const second = await gates.staffEnter(operator, { zoneId: 'city-lot', plate: '1234567' });
+    expect(second.sessionId).toBeTruthy();
+    await gates.staffExit(operator, { zoneId: 'city-lot', plate: '1234567' });
+    // Another operator's lot cannot be driven from this account.
+    await expect(gates.staffEnter(operator, { zoneId: 'mall-lot', plate: '1234567' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    // A lot without pay-as-you-go never starts a session, consent or not.
+    await db.parkingZone.update({ where: { id: 'city-lot' }, data: { supportedModes: ['prepaid'], defaultMode: 'prepaid' } });
+    const third = await gates.staffEnter(operator, { zoneId: 'city-lot', plate: '1234567' });
+    expect(third.sessionId).toBeUndefined();
+    expect(await db.parkingSession.count({ where: { vehicleId } })).toBe(1);
+  });
+
+  it('offers the car inside when the exit reading is one digit off', async () => {
+    await gates.staffEnter(operator, { zoneId: 'city-lot', plate: '5550001' });
+    expect(await gates.lookup(operator, 'city-lot', '5550007')).toMatchObject({ inside: false, suggested: 'entry', similarInside: [{ plateNumber: '5550001' }] });
+  });
+
+  it('accepts only complete 6–8 digit readings of the car at the gate', () => {
+    const plate = (digits: string | null, complete: boolean, reason: string | null = null) =>
+      ({ digits, complete, reason, confidence: 0.95, weakestDigit: 0.8, agreement: 1, detectionConfidence: 0.9, alternatives: [] });
+    expect(toReading({ plates: [plate('71662601', true)] })).toMatchObject({ plateNumber: '71662601', status: 'complete' });
+    expect(toReading({ plates: [plate('9101990', true)] })).toMatchObject({ plateNumber: '9101990', status: 'complete' });
+    // Uncertain readings are shown, never matched: cut off at the frame edge, weak digits.
+    expect(toReading({ plates: [plate('360416', false, 'cut_off')] })).toMatchObject({ plateNumber: null, status: 'uncertain', reason: 'cut_off', reading: '360416' });
+    expect(toReading({ plates: [plate('6204030', false, 'low_confidence')] })).toMatchObject({ plateNumber: null, reason: 'low_confidence' });
+    // Even if the reader said complete, a short or long number is not a ParkFlow plate.
+    expect(toReading({ plates: [plate('999803', true)] }).plateNumber).toBe('999803');
+    expect(toReading({ plates: [plate('99980', true)] })).toMatchObject({ plateNumber: null, reason: 'wrong_length' });
+    expect(toReading({ plates: [plate('123456789', true)] })).toMatchObject({ plateNumber: null, reason: 'wrong_length' });
+    // Only the first (largest, nearest) plate counts, even if a car behind reads better.
+    expect(toReading({ plates: [plate('9776730', false, 'disagreement'), plate('9824091', true)] })).toMatchObject({ plateNumber: null, status: 'uncertain' });
+    expect(toReading({ plates: [] })).toMatchObject({ plateNumber: null, status: 'none' });
+  });
+});
+
 describe('officer patrol', () => {
   it('gives gate-tracked cars their grace period and never double-charges them', async () => {
     await gates.staffEnter(operator, { zoneId: 'city-lot', plate: '1234567' });
@@ -186,5 +283,172 @@ describe('officer patrol', () => {
     await sessions.start(driver, { vehicleId, zoneId: 'city-lot', mode: 'start_stop', entryMethod: 'qr' }, randomUUID());
     expect(await gates.patrolCheck(officer, 'city-lot', '1234567')).toMatchObject({ allowed: true, reason: 'paid' });
     expect((await violations())[0]!.evidence).toMatchObject({ detectionSource: 'inspector', officerId: officer.userId });
+  });
+});
+
+describe('automatic SmartGate cameras', () => {
+  const complete = (plate: string, confidence = 0.97): PlateReading => ({ plateNumber: plate, status: 'complete', reading: plate, confidence, candidates: [] });
+  const unsure = (reading: string): PlateReading => ({ plateNumber: null, status: 'uncertain', reason: 'low_confidence', reading, confidence: 0.6, candidates: [] });
+  let frameNo = 0;
+  const frame = () => `frame-${++frameNo}`;
+  const camera = async (direction: 'entry' | 'exit') => db.gateDevice.findUniqueOrThrow({ where: { id: (await automatic.station(operator, 'city-lot', direction)).id } });
+  const feed = async (device: Awaited<ReturnType<typeof camera>>, reading: PlateReading, times: number) => {
+    let last: Awaited<ReturnType<typeof automatic.decide>> | undefined;
+    for (let i = 0; i < times; i++) last = await automatic.decide(device, reading, frame());
+    return last!;
+  };
+  const inside = async () => (await gates.occupancy(operator, 'city-lot')).inside;
+  // The car left the camera's view long enough for its cooldown to end.
+  const outOfView = (direction: 'entry' | 'exit', plate: string) => redis.del(`gate:cool:city-lot:${direction}:${plate}`);
+
+  beforeEach(async () => { await db.parkingZone.update({ where: { id: 'city-lot' }, data: { capacity: 20 } }); });
+
+  it('enters a car only after three agreeing frames, and only once while it stays in view', async () => {
+    const entry = await camera('entry');
+    expect((await feed(entry, complete('5550001'), 2)).state).toBe('tracking');
+    expect(await db.parkingVisit.count()).toBe(0);
+    const accepted = await automatic.decide(entry, complete('5550001'), frame());
+    expect(accepted).toMatchObject({ state: 'accepted', event: { outcome: 'entry', plateNumber: '5550001', frames: 3 } });
+    expect(await inside()).toBe(1);
+    expect((await feed(entry, complete('5550001'), 6)).state).toBe('cooldown');
+    expect(await db.parkingVisit.count()).toBe(1);
+    expect(await db.gateEvent.count()).toBe(1);
+  });
+
+  it('never accepts repeated, disagreeing, weak or uncertain readings, and flags them once without blocking', async () => {
+    const entry = await camera('entry');
+    for (let i = 0; i < 4; i++) await automatic.decide(entry, complete('5550001'), 'same-image');
+    expect(await db.parkingVisit.count()).toBe(0);
+    await redis.del(`gate:track:${entry.id}`);
+    for (const p of ['5550001', '5550007', '5550001', '5550007']) await automatic.decide(entry, complete(p), frame());
+    expect(await db.parkingVisit.count()).toBe(0);
+    await redis.del(`gate:track:${entry.id}`);
+    await feed(entry, complete('5550001', 0.6), 3);
+    expect(await db.parkingVisit.count()).toBe(0);
+    await redis.del(`gate:track:${entry.id}`);
+    await feed(entry, unsure('555000'), 12);
+    expect(await db.gateEvent.findMany({ select: { outcome: true, reading: true } })).toEqual([{ outcome: 'review', reading: '555000' }]);
+    // A car still approaching (too small) or half in view (cut off) is not flagged.
+    await redis.del(`gate:review:${entry.id}`, `gate:track:${entry.id}`);
+    await feed(entry, { ...unsure('6677'), reason: 'too_small' }, 8);
+    await feed(entry, { ...unsure('78999'), reason: 'cut_off' }, 8);
+    expect(await db.gateEvent.count()).toBe(1);
+    // The next car is still processed.
+    await feed(entry, complete('7770002'), 3);
+    expect(await db.parkingVisit.findMany({ select: { plateNumber: true } })).toEqual([{ plateNumber: '7770002' }]);
+  });
+
+  it('exits only from the exit camera and only after a real stay', async () => {
+    const [entry, exitCam] = [await camera('entry'), await camera('exit')];
+    await feed(entry, complete('5550001'), 3);
+    // Seen again at the entry camera later: still inside, never an exit.
+    await outOfView('entry', '5550001');
+    expect((await feed(entry, complete('5550001'), 3)).event).toMatchObject({ outcome: 'already_inside' });
+    expect(await inside()).toBe(1);
+    // At the exit camera seconds after entering: not trusted, flagged.
+    expect((await feed(exitCam, complete('5550001'), 3)).event).toMatchObject({ outcome: 'too_soon', needsReview: true });
+    expect(await inside()).toBe(1);
+    await db.parkingVisit.updateMany({ data: { enteredAt: minutes(120) } });
+    await outOfView('exit', '5550001');
+    expect((await feed(exitCam, complete('5550001'), 3)).event).toMatchObject({ outcome: 'exit' });
+    expect(await inside()).toBe(0);
+    await outOfView('exit', '5550001');
+    expect((await feed(exitCam, complete('5550001'), 3)).event).toMatchObject({ outcome: 'not_inside', needsReview: true });
+    expect(await inside()).toBe(0);
+    expect(await db.parkingVisit.count()).toBe(1);
+  });
+
+  it('starts and bills parking only with consent, and never charges twice', async () => {
+    const [entry, exitCam] = [await camera('entry'), await camera('exit')];
+    // No consent: recorded and notified, nothing billed.
+    await feed(entry, complete('1234567'), 3);
+    expect(await db.parkingSession.count()).toBe(0);
+    expect(await db.notification.count({ where: { userId: driver, type: 'gate_entry' } })).toBe(1);
+    await db.parkingVisit.updateMany({ data: { enteredAt: minutes(120) } });
+    await feed(exitCam, complete('1234567'), 3);
+    expect(await db.walletTransaction.count({ where: { wallet: { userId: driver }, type: 'parking_payment' } })).toBe(0);
+
+    await db.userVehicle.updateMany({ where: { vehicleId }, data: { autoGateParking: true } });
+    await outOfView('entry', '1234567'); await outOfView('exit', '1234567');
+    await feed(entry, complete('1234567'), 3);
+    const session = await db.parkingSession.findFirstOrThrow({ where: { vehicleId } });
+    expect(session.status).toBe('ACTIVE');
+    await db.parkingSession.update({ where: { id: session.id }, data: { startedAt: minutes(59) } });
+    await db.parkingVisit.updateMany({ where: { exitedAt: null }, data: { enteredAt: minutes(59) } });
+    // Racing exit frames from two exit cameras, then a late repeat: one exit, one charge.
+    const second = await db.gateDevice.findUniqueOrThrow({ where: { id: (await gates.createDevice(operator, 'city-lot', { name: 'Exit 2', kind: 'camera', direction: 'exit' })).id } });
+    await feed(exitCam, complete('1234567'), 2); await feed(second, complete('1234567'), 2);
+    const raced = await Promise.all([automatic.decide(exitCam, complete('1234567'), frame()), automatic.decide(second, complete('1234567'), frame())]);
+    expect(raced.filter((r) => r.state === 'accepted')).toHaveLength(1);
+    await outOfView('exit', '1234567');
+    await feed(exitCam, complete('1234567'), 3);
+    expect((await db.parkingSession.findUniqueOrThrow({ where: { id: session.id } })).status).toBe('COMPLETED');
+    expect(await db.walletTransaction.count({ where: { wallet: { userId: driver }, type: 'parking_payment' } })).toBe(1);
+    expect((await db.wallet.findUniqueOrThrow({ where: { userId: driver } })).balance).toBe(10000 - 600);
+    expect(await inside()).toBe(0);
+  });
+
+  describe('over HTTP', () => {
+    let stub: Server;
+    let replies: unknown[] = [];
+    let offline = false;
+    const original = env.ALPR_URL;
+    beforeAll(async () => {
+      stub = createServer((req, res) => {
+        req.resume();
+        req.on('end', () => {
+          if (offline) { res.statusCode = 503; res.end(); return; }
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(replies.shift() ?? { plates: [] }));
+        });
+      });
+      await new Promise<void>((done) => stub.listen(0, '127.0.0.1', done));
+      env.ALPR_URL = `http://127.0.0.1:${(stub.address() as { port: number }).port}`;
+    });
+    afterAll(async () => { env.ALPR_URL = original; await new Promise((done) => stub.close(done)); });
+    const plate = (digits: string) => ({ plates: [{ digits, complete: true, reason: null, confidence: 0.98, weakestDigit: 0.9, agreement: 1, detectionConfidence: 0.9, alternatives: [] }] });
+    const token = async (userId: string) => {
+      vi.spyOn(emailProvider, 'sendOtp').mockResolvedValue();
+      const { email } = await db.user.findUniqueOrThrow({ where: { id: userId } });
+      const challenge = await auth.requestOtp({ email: email! });
+      const code = vi.mocked(emailProvider.sendOtp).mock.calls.at(-1)![1];
+      return (await auth.verifyOtp({ challengeId: challenge.challengeId, code }, {})).session.accessToken;
+    };
+    const send = (path: string, headers: Record<string, string>, n: number) =>
+      request(app).post(path).set(headers).attach('image', Buffer.from(`frame ${n}`), { filename: 'f.jpg', contentType: 'image/jpeg' });
+
+    it('processes a browser camera station end to end, only for the lot owner', async () => {
+      const headers = { Authorization: `Bearer ${await token(operator.userId)}` };
+      const station = await request(app).post('/api/v1/gate/zones/city-lot/stations').set(headers).send({ direction: 'entry' });
+      expect(station.status).toBe(200);
+      replies = [plate('5550001'), plate('5550001'), plate('5550001')];
+      const states = [];
+      for (let n = 0; n < 3; n++) states.push((await send(`/api/v1/gate/devices/${station.body.id}/frames`, headers, n)).body.state);
+      expect(states).toEqual(['tracking', 'tracking', 'accepted']);
+      const live = await request(app).get('/api/v1/gate/zones/city-lot/live').set(headers);
+      expect(live.body.cameras[0]).toMatchObject({ direction: 'entry', online: true, lastPlate: '5550001' });
+      expect(live.body.events[0]).toMatchObject({ outcome: 'entry', plateNumber: '5550001' });
+      // Another lot's operator and a driver can neither use nor see this camera.
+      const otherOperator = await person('PARKING_OPERATOR');
+      await db.operatorUser.create({ data: { operatorId: 'mall', userId: otherOperator } });
+      expect((await send(`/api/v1/gate/devices/${station.body.id}/frames`, { Authorization: `Bearer ${await token(otherOperator)}` }, 9)).status).toBe(403);
+      expect((await request(app).get('/api/v1/gate/zones/city-lot/live').set({ Authorization: `Bearer ${await token(driver)}` })).status).toBe(403);
+    });
+
+    it('accepts hardware frames by device key and records nothing while recognition is offline', async () => {
+      const device = await gates.createDevice(operator, 'city-lot', { name: 'Barrier cam', kind: 'camera', direction: 'entry' });
+      expect((await send('/api/v1/gate/camera-frames', { 'X-Gate-Key': 'wrong' }, 1)).status).toBe(401);
+      offline = true;
+      for (let n = 0; n < 4; n++) expect((await send('/api/v1/gate/camera-frames', { 'X-Gate-Key': device.key }, n)).status).toBe(424);
+      expect(await db.gateEvent.count()).toBe(0);
+      expect((await db.gateDevice.findUniqueOrThrow({ where: { id: device.id } })).lastError).toMatch(/offline/);
+      offline = false;
+      replies = [plate('5550002'), plate('5550002'), plate('5550002')];
+      for (let n = 10; n < 13; n++) await send('/api/v1/gate/camera-frames', { 'X-Gate-Key': device.key }, n);
+      expect(await db.parkingVisit.findMany({ select: { plateNumber: true, entrySource: true } })).toEqual([{ plateNumber: '5550002', entrySource: 'camera' }]);
+      // A camera without a direction is not an automatic camera.
+      const plain = await gates.createDevice(operator, 'city-lot', { name: 'Old cam', kind: 'camera' });
+      expect((await send('/api/v1/gate/camera-frames', { 'X-Gate-Key': plain.key }, 20)).status).toBe(409);
+    });
   });
 });

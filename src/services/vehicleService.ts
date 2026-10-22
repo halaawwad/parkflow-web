@@ -185,4 +185,9 @@ export const mockVehicleService: VehicleService = {
       return db.permits.filter((p) => p.vehicleId === vehicleId);
     });
   },
+
+  async setAutoGateParking() {
+    // SmartGate runs only against the real backend.
+    throw new AppError('validation', 'SmartGate needs the ParkFlow backend');
+  },
 };

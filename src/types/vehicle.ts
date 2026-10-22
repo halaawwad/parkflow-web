@@ -43,5 +43,7 @@ export interface UserVehicleView extends Vehicle {
   role: UserVehicleRole;
   nickname?: string;
   isDefault: boolean;
+  /** This driver agreed that a SmartGate plate read starts and bills pay-as-you-go parking. */
+  autoGateParking?: boolean;
   displayName: string;
 }

@@ -11,14 +11,15 @@ import { event } from '../../realtime/outbox';
 interface Start {vehicleId:string;zoneId:string;mode:'start_stop'|'prepaid';durationMinutes?:number;entryMethod:string}
 function dto(s:ParkingSession){return {...s,currentCost:s.status==='ACTIVE'&&s.parkingMode==='start_stop'?computeCost(s.rateSnapshot as unknown as Rate,(Date.now()-s.startedAt.getTime())/1000):s.currentCost};}
 async function owned(tx:Tx,userId:string,id:string){return requireValue(await tx.parkingSession.findFirst({where:{id,userId}}));}
-export async function start(userId:string,input:Start,key:string){return idempotent(userId,'start',key,input,async tx=>{
+/** `viaGate`: started by a SmartGate plate read the driver authorized, so the lot's app entry methods do not apply. */
+export async function start(userId:string,input:Start,key:string,options:{viaGate?:boolean}={}){return idempotent(userId,'start',key,input,async tx=>{
  await lock(tx,`vehicle:${input.vehicleId}`);await vehicleAccess(tx,userId,input.vehicleId);
  assert(!await tx.parkingSession.findFirst({where:{vehicleId:input.vehicleId,status:'ACTIVE'}}),'ACTIVE_SESSION_EXISTS','This vehicle already has an active parking session',409);
  const now=new Date();const zone=requireValue(await tx.parkingZone.findFirst({where:{id:input.zoneId,active:true},include:{operatingHours:true,tariffs:{where:{validFrom:{lte:now},OR:[{validTo:null},{validTo:{gt:now}}]},orderBy:{validFrom:'desc'},take:1}}}));
  const tariff=requireValue(zone.tariffs[0],'No current tariff configured');
  assert(zone.parkingAllowed,'PARKING_RESTRICTED','This location is not available for normal public parking',409);
  assert(zone.supportedModes.includes(input.mode),'INVALID_MODE','This parking mode is not supported');
- assert(zone.supportedEntryMethods.includes(input.entryMethod),'INVALID_ENTRY_METHOD','This entry method is not supported');
+ assert(options.viaGate||zone.supportedEntryMethods.includes(input.entryMethod),'INVALID_ENTRY_METHOD','This entry method is not supported');
  const duration=input.durationMinutes;
  if(input.mode==='prepaid'){assert(duration&&Number.isInteger(duration)&&duration>=15&&duration%15===0,'INVALID_DURATION','Choose a duration in 15-minute increments');assert(!tariff.maxStayMinutes||duration<=tariff.maxStayMinutes,'MAX_STAY','Maximum stay exceeded');}
  const endsAt=input.mode==='prepaid'?new Date(now.getTime()+duration!*60000):undefined;

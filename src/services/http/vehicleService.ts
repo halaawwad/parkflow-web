@@ -5,4 +5,5 @@ export const httpVehicleService:VehicleService={
  async setDefault(_u,id){await api(`/vehicles/${segment(id)}/default`,{method:'PATCH',body:{}});},
  async unlink(_u,id){await api(`/vehicles/${segment(id)}`,{method:'DELETE',body:{}});},
  permits:id=>api(`/vehicles/${segment(id)}/permits`),
+ setAutoGateParking:(id,enabled)=>api(`/vehicles/${segment(id)}/smart-gate`,{method:'PATCH',body:{autoParking:enabled}}),
 };

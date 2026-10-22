@@ -20,6 +20,7 @@ import {
   SectionHeader,
   Skeleton,
   StatusBadge,
+  SwitchRow,
 } from '@/components/ui';
 import { PlateBadge } from '@/components/domain/PlateBadge';
 
@@ -28,6 +29,7 @@ import { spacing } from '@/theme/spacing';
 import { radius } from '@/theme/radius';
 import { useLocale } from '@/hooks/useLocale';
 import {
+  useSetAutoGateParking,
   useSetDefaultVehicle,
   useUnlinkVehicle,
   useVehicle,
@@ -61,6 +63,7 @@ export default function VehicleDetailScreen() {
   const { data: permits = [] } = useVehiclePermits(id);
   const { data: zones = [] } = useZones();
   const setDefault = useSetDefaultVehicle();
+  const autoGate = useSetAutoGateParking();
   const unlink = useUnlinkVehicle();
 
   const [removeOpen, setRemoveOpen] = useState(false);
@@ -184,6 +187,20 @@ export default function VehicleDetailScreen() {
           {vehicle.model ? <DetailRow label={t('vehicle.model')} value={vehicle.model} /> : null}
           {vehicle.color ? <DetailRow label={t('vehicle.color')} value={vehicle.color} /> : null}
           <DetailRow label={t('vehicle.addedOn')} value={formatDate(vehicle.createdAt, dateLocale)} />
+        </Card>
+
+        {/* ---- SmartGate consent --------------------------------------- */}
+        <Card padding="lg" style={{ gap: spacing.sm }}>
+          <SwitchRow
+            label={t('smartGate.autoParkingLabel')}
+            description={t('smartGate.autoParkingBody')}
+            value={Boolean(vehicle.autoGateParking)}
+            disabled={autoGate.isPending}
+            onValueChange={(enabled) => autoGate.mutate({ vehicleId: vehicle.id, enabled })}
+          />
+          {autoGate.isError ? (
+            <AppText variant="caption" color="danger">{errorMessage(autoGate.error)}</AppText>
+          ) : null}
         </Card>
 
         {!vehicle.isDefault ? (
