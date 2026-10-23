@@ -28,7 +28,7 @@ export const AUTO = {
   windowMs: 8_000,
   windowFrames: 8,
   /** Distinct frames that must agree on the same complete plate. */
-  acceptFrames: 3,
+  acceptFrames: 2,
   /** Mean reader confidence of those frames (each frame already passed the reader's own per-digit checks). */
   minConfidence: 0.85,
   /** One event per plate and direction while the car stays in view (refreshed on every sighting). */

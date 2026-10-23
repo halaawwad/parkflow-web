@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { View, type ViewStyle } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pause, Play } from 'lucide-react-native';
 
@@ -22,6 +22,44 @@ const MAX_BACKOFF_MS = 10_000;
 const RECONNECT_MS = 3_000;
 
 const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms));
+
+/** Plate guide: about a plate's shape, and a share of the preview that stays usable on phones and wide screens. */
+const GUIDE_ASPECT = 4;
+const GUIDE_WIDTH = '64%';
+const GUIDE_MAX_WIDTH = 440;
+const CORNER = 22;
+const STROKE = 3;
+
+/**
+ * One frame centered in the preview showing where the plate should be. Only a visual
+ * aim; recognition still uses the whole camera image. White while watching, amber while
+ * frames are agreeing (with their progress along the bottom), green once a plate is accepted.
+ */
+function PlateGuide({ result }: { result?: GateFrameResult }) {
+  const { colors } = useTheme();
+  const accepted = result?.state === 'accepted' || result?.state === 'cooldown';
+  const tracking = result?.state === 'tracking' && Boolean(result.leading);
+  const tone = accepted ? colors.success : tracking ? colors.warning : colors.onDeep;
+  const progress = accepted ? 1 : tracking && result.needed ? Math.min(1, result.votes / result.needed) : 0;
+  const edge = -STROKE / 2;
+  const base: ViewStyle = { position: 'absolute', width: CORNER, height: CORNER, borderColor: tone };
+
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: GUIDE_WIDTH, maxWidth: GUIDE_MAX_WIDTH, aspectRatio: GUIDE_ASPECT, borderRadius: radius.xs, borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)' }}>
+        <View style={[base, { top: edge, left: edge, borderTopWidth: STROKE, borderLeftWidth: STROKE, borderTopLeftRadius: radius.xs }]} />
+        <View style={[base, { top: edge, right: edge, borderTopWidth: STROKE, borderRightWidth: STROKE, borderTopRightRadius: radius.xs }]} />
+        <View style={[base, { bottom: edge, left: edge, borderBottomWidth: STROKE, borderLeftWidth: STROKE, borderBottomLeftRadius: radius.xs }]} />
+        <View style={[base, { bottom: edge, right: edge, borderBottomWidth: STROKE, borderRightWidth: STROKE, borderBottomRightRadius: radius.xs }]} />
+        {progress ? (
+          <View style={{ position: 'absolute', left: CORNER, right: CORNER, bottom: spacing.xs, height: 3, borderRadius: radius.pill, backgroundColor: 'rgba(255,255,255,0.25)', overflow: 'hidden' }}>
+            <View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: tone }} />
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+}
 
 /**
  * Turns this browser or phone into the lot's unattended entry or exit camera. It
@@ -113,6 +151,7 @@ export function GateCameraStation({ zoneId }: { zoneId: string }) {
 
       <View style={{ width: '100%', aspectRatio: 16 / 9, borderRadius: radius.xl, overflow: 'hidden', backgroundColor: colors.deep, alignItems: 'center', justifyContent: 'center' }}>
         <CameraFeed key={attempt} ref={feed} active={running} onStatus={onStatus} />
+        {live ? <PlateGuide result={last} /> : null}
         <View pointerEvents="none" style={{ position: 'absolute', bottom: spacing.md, left: spacing.md, right: spacing.md, flexDirection: row, justifyContent: 'space-between', gap: spacing.sm }}>
           <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: radius.pill, backgroundColor: 'rgba(0,0,0,0.6)', flexShrink: 1 }}>
             <AppText variant="caption" color="onDeep" numberOfLines={1}>{stateText}</AppText>
