@@ -20,6 +20,8 @@ const FRAME_GAP_MS = 350;
 const MAX_BACKOFF_MS = 10_000;
 /** A lost camera is reopened after this long. */
 const RECONNECT_MS = 3_000;
+/** One detection attempt sends frames for at most this long. */
+const ATTEMPT_MS = 5_000;
 
 const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms));
 
@@ -33,14 +35,13 @@ const STROKE = 3;
 /**
  * One frame centered in the preview showing where the plate should be. Only a visual
  * aim; recognition still uses the whole camera image. White while watching, amber while
- * frames are agreeing (with their progress along the bottom), green once a plate is accepted.
+ * a plate is in view but not read yet, green once a plate is accepted, red when the
+ * attempt ended without one.
  */
-function PlateGuide({ result }: { result?: GateFrameResult }) {
+function PlateGuide({ result, missed }: { result?: GateFrameResult; missed: boolean }) {
   const { colors } = useTheme();
   const accepted = result?.state === 'accepted' || result?.state === 'cooldown';
-  const tracking = result?.state === 'tracking' && Boolean(result.leading);
-  const tone = accepted ? colors.success : tracking ? colors.warning : colors.onDeep;
-  const progress = accepted ? 1 : tracking && result.needed ? Math.min(1, result.votes / result.needed) : 0;
+  const tone = accepted ? colors.success : missed ? colors.danger : result?.state === 'tracking' ? colors.warning : colors.onDeep;
   const edge = -STROKE / 2;
   const base: ViewStyle = { position: 'absolute', width: CORNER, height: CORNER, borderColor: tone };
 
@@ -51,21 +52,16 @@ function PlateGuide({ result }: { result?: GateFrameResult }) {
         <View style={[base, { top: edge, right: edge, borderTopWidth: STROKE, borderRightWidth: STROKE, borderTopRightRadius: radius.xs }]} />
         <View style={[base, { bottom: edge, left: edge, borderBottomWidth: STROKE, borderLeftWidth: STROKE, borderBottomLeftRadius: radius.xs }]} />
         <View style={[base, { bottom: edge, right: edge, borderBottomWidth: STROKE, borderRightWidth: STROKE, borderBottomRightRadius: radius.xs }]} />
-        {progress ? (
-          <View style={{ position: 'absolute', left: CORNER, right: CORNER, bottom: spacing.xs, height: 3, borderRadius: radius.pill, backgroundColor: 'rgba(255,255,255,0.25)', overflow: 'hidden' }}>
-            <View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: tone }} />
-          </View>
-        ) : null}
       </View>
     </View>
   );
 }
 
 /**
- * Turns this browser or phone into the lot's unattended entry or exit camera. It
- * sends frames continuously; the server accepts a plate only when several frames
- * agree, records the entry or exit, and updates occupancy. Nobody needs to tap
- * anything — the owner just watches.
+ * Turns this browser or phone into the lot's entry or exit camera. Each attempt sends
+ * frames for up to ATTEMPT_MS; the server accepts the first complete, confident plate,
+ * records the entry or exit and updates occupancy, and the attempt stops there. With
+ * no plate in time it shows "Plate not detected", and a new attempt is one tap away.
  */
 export function GateCameraStation({ zoneId }: { zoneId: string }) {
   const { t, row } = useLocale();
@@ -79,6 +75,9 @@ export function GateCameraStation({ zoneId }: { zoneId: string }) {
   const [last, setLast] = useState<GateFrameResult>();
   const [lastPlate, setLastPlate] = useState<string>();
   const [error, setError] = useState<string>();
+  /** scanning: an attempt is running; found: a plate was accepted; missed: the attempt timed out. */
+  const [phase, setPhase] = useState<'scanning' | 'found' | 'missed'>('scanning');
+  const scanAgain = () => { setLast(undefined); setError(undefined); setPhase('scanning'); };
   const station = useMutation({ mutationFn: (d: GateDirection) => services.gates.station(zoneId, d) });
   const { mutate: openStation } = station;
   const deviceId = station.data?.direction === direction ? station.data.id : undefined;
@@ -94,11 +93,12 @@ export function GateCameraStation({ zoneId }: { zoneId: string }) {
 
   const onStatus = useCallback((status: CameraStatus) => setCamera(status), []);
 
-  // One frame at a time, forever, until stopped. Errors back off; nothing is recorded on errors.
+  // One frame at a time until a plate is accepted or the attempt runs out. Errors back off; nothing is recorded on errors.
   useEffect(() => {
-    if (!running || camera.state !== 'live' || !deviceId) return;
+    if (!running || camera.state !== 'live' || !deviceId || phase !== 'scanning') return;
     let cancelled = false;
     (async () => {
+      const deadline = Date.now() + ATTEMPT_MS;
       let failures = 0;
       while (!cancelled) {
         const started = Date.now();
@@ -116,24 +116,29 @@ export function GateCameraStation({ zoneId }: { zoneId: string }) {
               void queryClient.invalidateQueries({ queryKey: ['gate-occupancy'] });
               void queryClient.invalidateQueries({ queryKey: ['gate-visits'] });
             }
+            // A valid plate ends the attempt: accepted now, or already processed moments ago.
+            if (result.state === 'accepted' || result.state === 'cooldown') { setPhase('found'); break; }
           }
         } catch (e) {
           failures += 1;
           if (!cancelled) setError(errorMessage(e));
         }
+        const left = deadline - Date.now();
+        if (left <= 0) { if (!cancelled) setPhase('missed'); break; }
         const wait = failures ? Math.min(MAX_BACKOFF_MS, 1000 * 2 ** (failures - 1)) : Math.max(0, FRAME_GAP_MS - (Date.now() - started));
-        await sleep(wait);
+        await sleep(Math.min(wait, left));
       }
     })();
     return () => { cancelled = true; };
-  }, [running, camera.state, deviceId, queryClient]);
+  }, [running, camera.state, deviceId, phase, queryClient]);
 
   const live = running && camera.state === 'live' && Boolean(deviceId);
   const stateText = !running ? t('smartGate.auto.stopped')
     : camera.state === 'error' ? t(`smartGate.auto.camera.${camera.detail ?? 'unavailable'}` as 'smartGate.auto.camera.unavailable')
     : camera.state === 'starting' || !deviceId ? t('smartGate.auto.starting')
+    : phase === 'found' ? t('smartGate.auto.plateAccepted')
+    : phase === 'missed' ? t('smartGate.auto.notDetected')
     : error ? t('smartGate.auto.retrying')
-    : last?.state === 'tracking' && last.leading ? t('smartGate.auto.tracking', { plate: last.leading, votes: last.votes, needed: last.needed })
     : last?.state === 'tracking' ? t('smartGate.auto.reading')
     : t('smartGate.auto.watching');
   const event = last?.event;
@@ -144,14 +149,14 @@ export function GateCameraStation({ zoneId }: { zoneId: string }) {
         <AppText variant="title" style={{ flex: 1 }}>{t('smartGate.auto.title')}</AppText>
         <StatusBadge label={live && !error ? t('smartGate.auto.live') : t('smartGate.auto.notLive')} tone={live && !error ? 'success' : running ? 'warning' : 'neutral'} />
       </View>
-      <Segmented variant="inset" value={direction} onChange={(d) => { setLast(undefined); setDirection(d); }} options={[
+      <Segmented variant="inset" value={direction} onChange={(d) => { scanAgain(); setDirection(d); }} options={[
         { value: 'entry', label: t('smartGate.auto.entryCamera') }, { value: 'exit', label: t('smartGate.auto.exitCamera') },
       ]} />
       <AppText variant="caption" color="textTertiary">{direction === 'entry' ? t('smartGate.auto.entryNote') : t('smartGate.auto.exitNote')}</AppText>
 
       <View style={{ width: '100%', aspectRatio: 16 / 9, borderRadius: radius.xl, overflow: 'hidden', backgroundColor: colors.deep, alignItems: 'center', justifyContent: 'center' }}>
         <CameraFeed key={attempt} ref={feed} active={running} onStatus={onStatus} />
-        {live ? <PlateGuide result={last} /> : null}
+        {live ? <PlateGuide result={last} missed={phase === 'missed'} /> : null}
         <View pointerEvents="none" style={{ position: 'absolute', bottom: spacing.md, left: spacing.md, right: spacing.md, flexDirection: row, justifyContent: 'space-between', gap: spacing.sm }}>
           <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: radius.pill, backgroundColor: 'rgba(0,0,0,0.6)', flexShrink: 1 }}>
             <AppText variant="caption" color="onDeep" numberOfLines={1}>{stateText}</AppText>
@@ -176,11 +181,20 @@ export function GateCameraStation({ zoneId }: { zoneId: string }) {
       {event ? (
         <InlineNotice tone={event.outcome === 'entry' || event.outcome === 'exit' ? 'success' : event.needsReview ? 'warning' : 'info'}
           title={`${event.plateNumber ?? event.reading ?? ''} · ${t(`smartGate.outcome.${event.outcome}`)}`} />
+      ) : phase === 'found' && last?.plateNumber ? (
+        <InlineNotice tone="info" title={t('smartGate.auto.alreadyProcessed', { plate: last.plateNumber })} />
       ) : null}
+      {phase === 'missed' && running ? <InlineNotice tone="warning" title={t('smartGate.auto.notDetected')} /> : null}
 
-      <AppButton size="sm" variant="secondary" fullWidth={false} label={running ? t('smartGate.auto.stop') : t('smartGate.auto.start')}
-        icon={running ? <Pause size={16} color={colors.text} /> : <Play size={16} color={colors.text} />}
-        onPress={() => { setLast(undefined); setError(undefined); setRunning((r) => !r); }} />
+      <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' }}>
+        {running && phase !== 'scanning' ? (
+          <AppButton size="sm" fullWidth={false} label={phase === 'missed' ? t('smartGate.auto.tryAgain') : t('smartGate.auto.scanNext')}
+            icon={<Play size={16} color={colors.textOnColor} />} onPress={scanAgain} />
+        ) : null}
+        <AppButton size="sm" variant="secondary" fullWidth={false} label={running ? t('smartGate.auto.stop') : t('smartGate.auto.start')}
+          icon={running ? <Pause size={16} color={colors.text} /> : <Play size={16} color={colors.text} />}
+          onPress={() => { scanAgain(); setRunning((r) => !r); }} />
+      </View>
     </Card>
   );
 }

@@ -145,12 +145,9 @@ export interface GateLiveView { cameras: GateCamera[]; events: GateEvent[] }
 /** The server's answer to each automatic camera frame. */
 export interface GateFrameResult {
   state: 'idle' | 'tracking' | 'accepted' | 'cooldown' | 'review' | 'repeated_frame' | 'busy';
-  votes: number;
-  needed: number;
   plateNumber?: string | null;
   reading?: string;
   reason?: string;
-  leading?: string;
   event?: GateEvent;
 }
 

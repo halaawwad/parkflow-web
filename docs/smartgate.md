@@ -1,10 +1,11 @@
 # SmartGate
 
-SmartGate runs unattended. A laptop or phone at the gate, or a hardware camera, works
-as the lot's **entry camera** or **exit camera**. It watches continuously, and plates
-it reads reliably are entered or exited automatically. Occupancy, notifications and
-parking sessions then update by themselves. The owner only watches the live
-dashboard; nothing needs to be confirmed in normal operation.
+A laptop or phone at the gate, or a hardware camera, works as the lot's **entry
+camera** or **exit camera**. Plates it reads reliably are entered or exited
+automatically, and occupancy, notifications and parking sessions update by
+themselves. Nothing needs to be confirmed. A hardware camera sends frames
+continuously; the browser or phone camera scans in attempts of up to 5 seconds, and
+a tap starts the next one.
 
 **Any plate can enter.** A car that is not in ParkFlow gets a visit under its plate
 number and counts toward occupancy like any other car. It needs no account, and it is
@@ -25,12 +26,14 @@ never charged.
 1. **Each frame is read on its own.** Only digits are read, and a reading counts only
    if it is complete: 6–8 digits, the whole plate in view, close enough, and every
    digit confident (`server/alpr/README.md`).
-2. **Frames must agree.** A plate is accepted only when **2 distinct frames** from
-   the same camera read exactly the same complete number within 8 seconds. Any other complete
-   reading in that window must be clearly outvoted, and the agreeing frames must be
-   confident (mean ≥ 0.85). Sending the same image again does not count twice. These
-   decisions are made on the server, so a refreshed page or a second tab cannot
-   change them.
+2. **The first valid reading is accepted.** The first frame with a complete,
+   confident reading (≥ 0.85) is accepted straight away. Sending the same image again
+   does not count as a new frame. These decisions are made on the server, so a
+   refreshed page or a second tab cannot change them.
+   - On the browser or phone camera, each attempt sends frames for up to 5 seconds
+     and stops as soon as a plate is accepted. With no plate in that time it shows
+     *Plate not detected*; *Try again* (or *Scan next vehicle* after a plate) starts
+     a new attempt.
 3. **The camera's direction decides entry or exit.**
    - **Entry camera:** opens a visit. If the car is already inside, nothing changes
      (`already_inside`).
@@ -73,8 +76,10 @@ What an accepted entry or exit does is unchanged:
   gate. It then:
   - starts by itself and asks the browser for 1080p;
   - keeps the screen awake and reopens a lost camera by itself;
-  - shows what it sees: watching, reading a plate (frames agreeing so far), the last
-    plate, the last event, and any errors.
+  - scans for up to 5 seconds per attempt and stops at the first accepted plate;
+  - shows what it sees: watching, reading a plate, *Plate accepted* or *Plate not
+    detected*, the last plate, the last event, and any errors, with *Try again* or
+    *Scan next vehicle* to start the next attempt.
 - **Cameras.** Each camera's online status, last plate and last error.
 - **Camera events.** Every entry and exit.
 - **To review.** Unclear plates, exits without an entry, exits too soon after entry,

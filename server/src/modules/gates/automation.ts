@@ -11,9 +11,8 @@ import { enter, exit, hashKey, zoneFor, type Staff } from './service';
  * Unattended SmartGate cameras. Each camera is either an entry or an exit camera,
  * sends frames continuously, and the server decides — no operator in the loop:
  *
- * - A plate is accepted only when several distinct frames agree on the same
- *   complete reading. One frame is never enough, a repeated image counts once,
- *   and a reading the frames disagree on is never accepted.
+ * - A plate is accepted on the first frame whose reading is complete (the reader's
+ *   own plate and per-digit checks passed) and confident. A repeated image counts once.
  * - An entry camera only records entries and an exit camera only exits. Seeing a
  *   plate again never turns into an exit.
  * - Duplicates are stopped three times over: a per-plate cooldown that keeps
@@ -24,12 +23,10 @@ import { enter, exit, hashKey, zoneFor, type Staff } from './service';
  */
 
 export const AUTO = {
-  /** Frames older than this no longer count toward agreement. */
+  /** Recent frames kept to spot repeated images and plates that stay unclear. */
   windowMs: 8_000,
   windowFrames: 8,
-  /** Distinct frames that must agree on the same complete plate. */
-  acceptFrames: 2,
-  /** Mean reader confidence of those frames (each frame already passed the reader's own per-digit checks). */
+  /** Reader confidence a complete reading needs to be accepted (it already passed the reader's own per-digit checks). */
   minConfidence: 0.85,
   /** One event per plate and direction while the car stays in view (refreshed on every sighting). */
   cooldownMs: 90_000,
@@ -116,14 +113,9 @@ export type FrameState = 'idle' | 'tracking' | 'accepted' | 'cooldown' | 'review
 /** What a camera is told after each frame, for its live status. */
 export interface FrameResult {
   state: FrameState;
-  /** Agreeing frames so far, and how many are needed. */
-  votes: number;
-  needed: number;
   plateNumber?: string | null;
   reading?: string;
   reason?: string;
-  /** The plate the agreeing frames point to, while not yet accepted. */
-  leading?: string;
   event?: GateEventView;
 }
 
@@ -134,9 +126,9 @@ export interface FrameResult {
 export async function decide(device: GateDevice, reading: PlateReading, frameHash: string, now = Date.now()): Promise<FrameResult> {
   const direction = device.direction as Direction;
   const track = (await loadTrack(device.id)).filter((f) => now - f.at <= AUTO.windowMs);
-  const base = { needed: AUTO.acceptFrames, reading: reading.reading, reason: reading.reason, plateNumber: reading.plateNumber };
+  const base = { reading: reading.reading, reason: reading.reason, plateNumber: reading.plateNumber };
   // The same image sent again (a retry, a frozen camera) is not new evidence.
-  if (track.some((f) => f.hash === frameHash)) return { ...base, state: 'repeated_frame' as FrameState, votes: 0 };
+  if (track.some((f) => f.hash === frameHash)) return { ...base, state: 'repeated_frame' as FrameState };
 
   track.push({ hash: frameHash, at: now, plate: reading.plateNumber, reading: reading.reading ?? null, confidence: reading.confidence, reason: reading.reason ?? null });
   const frames = track.slice(-AUTO.windowFrames);
@@ -146,23 +138,18 @@ export async function decide(device: GateDevice, reading: PlateReading, frameHas
   if (reading.plateNumber && await redis.exists(coolKey(device.parkingZoneId, direction, reading.plateNumber))) {
     await redis.pexpire(coolKey(device.parkingZoneId, direction, reading.plateNumber), AUTO.cooldownMs);
     await saveTrack(device.id, frames.filter((f) => f.plate !== reading.plateNumber));
-    return { ...base, state: 'cooldown' as FrameState, votes: 0 };
+    return { ...base, state: 'cooldown' as FrameState };
   }
 
-  const groups = new Map<string, Frame[]>();
-  for (const f of frames) if (f.plate) groups.set(f.plate, [...(groups.get(f.plate) ?? []), f]);
-  const [plate, agreeing] = [...groups.entries()].sort((a, b) => b[1].length - a[1].length)[0] ?? [null, [] as Frame[]];
-  const conflicting = [...groups.values()].reduce((n, g) => n + g.length, 0) - agreeing.length;
-  const confidence = agreeing.length ? agreeing.reduce((n, f) => n + f.confidence, 0) / agreeing.length : 0;
-
-  // Enough distinct frames agree, other complete readings are clearly outvoted, and they are confident.
-  if (plate && agreeing.length >= AUTO.acceptFrames && conflicting * 2 < agreeing.length && confidence >= AUTO.minConfidence) {
+  // The first complete, confident reading is accepted straight away.
+  const plate = reading.plateNumber;
+  if (plate && reading.confidence >= AUTO.minConfidence) {
     await saveTrack(device.id, []); // These frames are used up either way.
     // Only one acceptance per plate and direction, however many cameras or retries race here.
     const fresh = await redis.set(coolKey(device.parkingZoneId, direction, plate), '1', 'PX', AUTO.cooldownMs, 'NX');
-    if (!fresh) return { ...base, state: 'cooldown' as FrameState, votes: agreeing.length };
-    const event = await apply(device, direction, plate, agreeing.length, Math.round(confidence * 100) / 100);
-    return { ...base, state: 'accepted' as FrameState, votes: agreeing.length, event };
+    if (!fresh) return { ...base, state: 'cooldown' as FrameState };
+    const event = await apply(device, direction, plate, 1, Math.round(reading.confidence * 100) / 100);
+    return { ...base, state: 'accepted' as FrameState, event };
   }
 
   // A plate has been in view for a while without a reading certain enough: flag it once, keep scanning.
@@ -176,15 +163,15 @@ export async function decide(device: GateDevice, reading: PlateReading, frameHas
     const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]![0];
     const reasons = [...new Set(inView.map((f) => f.reason).filter(Boolean))].join(', ');
     const event = await db.gateEvent.create({
-      data: { parkingZoneId: device.parkingZoneId, deviceId: device.id, direction, reading: best, outcome: 'review', frames: inView.length, message: reasons || 'readings disagree' },
+      data: { parkingZoneId: device.parkingZoneId, deviceId: device.id, direction, reading: best, outcome: 'review', frames: inView.length, message: reasons || 'low confidence' },
       include: { device: { select: { name: true } } },
     });
     await saveTrack(device.id, []);
-    return { ...base, state: 'review' as FrameState, votes: agreeing.length, event: eventView(event) };
+    return { ...base, state: 'review' as FrameState, event: eventView(event) };
   }
 
   await saveTrack(device.id, frames);
-  return { ...base, state: (inView.length ? 'tracking' : 'idle') as FrameState, votes: agreeing.length, leading: plate ?? undefined };
+  return { ...base, state: (inView.length ? 'tracking' : 'idle') as FrameState };
 }
 
 /** One camera frame: read it, then decide. One frame per camera at a time. */
@@ -193,7 +180,7 @@ export async function processFrame(device: GateDevice, image: { buffer: Buffer; 
     'GATE_DEVICE', 'This device is not an automatic entry or exit camera', 409);
   const token = randomBytes(8).toString('hex');
   // A second frame while one is still being read (two tabs, a retry) is dropped, not queued.
-  if (!await redis.set(busyKey(device.id), token, 'PX', 20_000, 'NX')) return { state: 'busy' as FrameState, votes: 0, needed: AUTO.acceptFrames };
+  if (!await redis.set(busyKey(device.id), token, 'PX', 20_000, 'NX')) return { state: 'busy' as FrameState };
   try {
     let reading: PlateReading;
     try {
