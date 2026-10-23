@@ -4,7 +4,7 @@ export const NOTIFICATION_TYPES = [
   'parking_started', 'parking_reminder', 'parking_expiring', 'parking_completed',
   'low_balance', 'topup_success', 'payment_success', 'payment_failed',
   'violation_issued', 'appeal_updated', 'points_awarded', 'reward_paid',
-  'gate_entry', 'overstay_warning',
+  'gate_entry', 'gate_exit', 'overstay_warning',
   'ride_request', 'ride_accepted', 'ride_declined', 'ride_booking_cancelled',
   'ride_cancelled', 'ride_completed',
   'spot_request', 'spot_confirmed', 'spot_declined', 'spot_cancelled',

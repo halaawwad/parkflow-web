@@ -27,7 +27,7 @@ vi.mock('react-native', () => ({
 vi.mock('lucide-react-native', () => {
   const icon = (name: string) => () => <svg data-icon={name} />;
   return Object.fromEntries(['Bell', 'BellRing', 'CircleParking', 'CircleCheck', 'CircleAlert',
-    'Gift', 'ScrollText', 'Wallet', 'Gavel', 'Timer', 'Car'].map(name => [name, icon(name)]));
+    'Gift', 'ScrollText', 'Wallet', 'Gavel', 'Timer', 'Car', 'LogOut'].map(name => [name, icon(name)]));
 });
 vi.mock('expo-router', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('@/components/ui', () => ({

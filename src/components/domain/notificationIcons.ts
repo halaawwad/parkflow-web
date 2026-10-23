@@ -10,6 +10,7 @@ import {
   Gavel,
   Timer,
   Car,
+  LogOut,
 } from 'lucide-react-native';
 import type { NotificationType } from '@/types';
 
@@ -28,6 +29,7 @@ export const NOTIFICATION_ICONS: Record<NotificationType, typeof Bell> = {
   points_awarded: Gift,
   reward_paid: WalletIcon,
   gate_entry: CircleParking,
+  gate_exit: LogOut,
   overstay_warning: Timer,
   ride_request: Car,
   ride_accepted: CircleCheck,
