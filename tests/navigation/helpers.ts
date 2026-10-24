@@ -4,6 +4,9 @@ import { bearingAtDistance, pointAtDistance } from '@/utils/navigation/geometry'
 import type { LocationFix } from '@/utils/navigation/session';
 import manara from './fixtures/ramallah-manara-route.json';
 import second from './fixtures/ramallah-second-route.json';
+// Real pedestrian routes from the OSRM foot profile (routing.openstreetmap.de), Ramallah, recorded for these tests.
+import walkHospital from './fixtures/ramallah-walk-hospital-route.json';
+import walkManara from './fixtures/ramallah-walk-manara-route.json';
 
 type LngLat = [number, number];
 interface OsrmJson {
@@ -61,6 +64,8 @@ export function routeResultFromOsrm(json: OsrmJson): RouteResult {
 export const fixtures = {
   manara: routeResultFromOsrm(manara as unknown as OsrmJson),
   second: routeResultFromOsrm(second as unknown as OsrmJson),
+  walkHospital: { ...routeResultFromOsrm(walkHospital as unknown as OsrmJson), profile: 'walking' as const },
+  walkManara: { ...routeResultFromOsrm(walkManara as unknown as OsrmJson), profile: 'walking' as const },
 };
 
 export function navRoute(result: RouteResult): NavigationRoute {

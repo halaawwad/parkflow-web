@@ -13,7 +13,7 @@ const T0 = 1_000_000;
  */
 function coverage(route: NavigationRoute, speed: number, locale: 'ar' | 'en') {
   let state: NavigationState = [
-    { type: 'start', now: T0 } as const,
+    { type: 'start', now: T0, profile: route.profile } as const,
     { type: 'fix', fix: fixAt(route, 0, T0), now: T0 } as const,
     { type: 'route-requested', now: T0 } as const,
     { type: 'route-ready', route, now: T0 } as const,
@@ -41,14 +41,16 @@ function coverage(route: NavigationRoute, speed: number, locale: 'ar' | 'en') {
 
 describe('natural voice prefetch coverage', () => {
   for (const [name, result] of Object.entries(fixtures)) {
-    for (const speed of [6, 10, 14]) {
+    // Each route at speeds its mode actually travels: slow to brisk walking (and a jog), or city driving.
+    const speeds = result.profile === 'walking' ? [1.0, 1.4, 2.0, 2.5] : [6, 10, 14];
+    for (const speed of speeds) {
       for (const locale of ['ar', 'en'] as const) {
         it(`${name} at ${speed} m/s (${locale}): every prompt is ready before it is spoken`, () => {
           const prompts = coverage(navRoute(result), speed, locale);
           expect(prompts.length).toBeGreaterThan(3);
           expect(prompts.filter((p) => !p.covered).map((p) => p.text)).toEqual([]);
           // Urgent "turn now" prompts must already be fetched a fix or more ahead.
-          expect(prompts.filter((p) => !p.early && !/^(In |بعد )/.test(p.text) && !/^(Continue|استمر)/.test(p.text)).map((p) => p.text)).toEqual([]);
+          expect(prompts.filter((p) => !p.early && !/^(In |بعد )/.test(p.text) && !/^(Continue|استمر|تابع)/.test(p.text)).map((p) => p.text)).toEqual([]);
         });
       }
     }
