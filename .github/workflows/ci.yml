@@ -1,0 +1,98 @@
+name: CI
+# Every pull request and every push to main: types, unit and integration tests, a production
+# web build, a dependency audit and a secret scan. No real API keys are used: external
+# providers (routing, Gemini) are mocked in the tests, so ordinary checks cost nothing.
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: App (typecheck, tests, web build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Navigation engine tests (simulated GPS on recorded routes)
+        run: npm run test:navigation
+      - run: npm run test:notifications
+      - run: npm run test:network
+      - name: Production web build
+        run: npx expo export --platform web --max-workers 2 --output-dir /tmp/parkflow-web
+        env:
+          EXPO_PUBLIC_API_BASE_URL: https://example.invalid/api/v1
+      - name: Dependency audit (fails on critical)
+        run: npm audit --omit=dev --audit-level=critical
+
+  server:
+    name: Server (typecheck, build, tests)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: parkflow
+          POSTGRES_PASSWORD: isolated-ci-only
+          POSTGRES_DB: parkflow_test
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U parkflow -d parkflow_test" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://parkflow:isolated-ci-only@localhost:5432/parkflow_test
+      DATABASE_URL: postgresql://parkflow:isolated-ci-only@localhost:5432/parkflow_test
+      REDIS_URL: redis://localhost:6379
+      NODE_ENV: test
+      # Placeholder test values, not secrets.
+      JWT_ACCESS_SECRET: isolated-ci-access-secret-placeholder-only
+      JWT_REFRESH_SECRET: isolated-ci-refresh-secret-placeholder-only
+      PAYMENT_WEBHOOK_SECRET: isolated-ci-webhook-secret-placeholder-only
+      EMAIL_FROM: tests@parkflow.example
+      SMTP_HOST: localhost
+      SMTP_USER: isolated-test
+      S3_ENDPOINT: http://localhost:9000
+      S3_BUCKET: isolated-tests
+      S3_ACCESS_KEY: isolated-test
+      S3_SECRET_KEY: isolated-test
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
+      - name: Dependency audit (fails on critical)
+        run: npm audit --omit=dev --audit-level=critical
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.21.2 \
+            detect --source /repo --no-banner --redact --log-opts="${{ github.event_name == 'pull_request' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || '-1' }}"
