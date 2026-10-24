@@ -32,6 +32,8 @@ export interface MapRoute {
   showRouteLegend?: boolean;
   /** Alternatives that were not taken — drawn dashed. */
   alternatives: GeoPoint[][];
+  /** A walking route, drawn dotted so it never reads as a road to drive. */
+  walking?: boolean;
 }
 
 /** Live turn-by-turn state drawn by the map while navigating. */
@@ -51,6 +53,10 @@ export interface MapNavigation {
   follow: boolean;
   /** Screen space taken by the guidance card and trip panel, so the car is framed between them. */
   padding: { top: number; bottom: number };
+  /** Walking: dotted route and a closer follow zoom. */
+  walking?: boolean;
+  /** Show the whole remaining route instead of following. */
+  overview?: boolean;
 }
 
 export interface MapLandmark {

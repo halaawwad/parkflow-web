@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CheckpointStatus, GeoPoint, ReportedAvailability } from '@/types';
+import type { CheckpointStatus, GeoPoint, ReportedAvailability, TravelMode } from '@/types';
+import type { RouteSummaryRequest } from '@/services';
 import { services } from '@/services';
 import { useInAppNotificationStore } from '@/store/inAppNotificationStore';
 import { queryKeys } from './queryKeys';
@@ -64,16 +65,28 @@ export function useRoute(
   from?: GeoPoint,
   to?: GeoPoint,
   options?: {
+    profile?: TravelMode;
     mode?: 'checkpoint-aware' | 'fastest';
     snapDestination?: boolean;
     maxAlternatives?: number;
   },
 ) {
   return useQuery({
-    queryKey: queryKeys.route(from, to, options?.mode),
+    queryKey: queryKeys.route(from, to, options?.mode, options?.profile),
     queryFn: () => services.routing.getRoute(from!, to!, options),
     enabled: Boolean(from && to),
     staleTime: 60_000,
+    retry: false,
+  });
+}
+
+/** Optional AI overview of a route; fetched only when asked for (route details opened). */
+export function useRouteSummary(input: RouteSummaryRequest | undefined) {
+  return useQuery({
+    queryKey: ['route-summary', input] as const,
+    queryFn: () => services.routing.summarize(input!),
+    enabled: Boolean(input),
+    staleTime: 30 * 60_000,
     retry: false,
   });
 }

@@ -77,13 +77,30 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
   const follow = Boolean(navigation?.follow);
   const navPosition = navigation?.position;
   const navHeading = navigation?.heading;
+  const navWalking = Boolean(navigation?.walking);
   useEffect(() => {
     if (!follow || !navPosition) return;
+    // Walking: closer and flat, which reads better at street level than the tilted driving view.
     mapRef.current?.animateCamera(
-      { center: navPosition, heading: navHeading ?? 0, pitch: 45, zoom: 17.5 },
+      { center: navPosition, heading: navHeading ?? 0, pitch: navWalking ? 0 : 45, zoom: navWalking ? 18.5 : 17.5 },
       { duration: 900 },
     );
-  }, [follow, navPosition, navHeading]);
+  }, [follow, navPosition, navHeading, navWalking]);
+
+  // Full-route overview, framed between the guidance card and the trip panel.
+  const overview = Boolean(navigation?.overview);
+  const navigationRef = useRef(navigation);
+  navigationRef.current = navigation;
+  useEffect(() => {
+    const current = navigationRef.current;
+    if (!overview || !current) return;
+    const points = [current.position, ...current.remaining];
+    if (points.length < 2) return;
+    mapRef.current?.fitToCoordinates(points, {
+      edgePadding: { top: current.padding.top + 16, right: 40, bottom: current.padding.bottom + 16, left: 40 },
+      animated: true,
+    });
+  }, [overview]);
 
   useImperativeHandle(ref, () => ({
     animateToRegion: (next, durationMs = 500) => {
@@ -125,7 +142,7 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
           <>
             <Polyline coordinates={navigation.traveled} strokeColor={colors.borderStrong} strokeWidth={7} lineCap="round" lineJoin="round" />
             <Polyline coordinates={navigation.remaining} strokeColor={colors.surface} strokeWidth={13} lineCap="round" lineJoin="round" />
-            <Polyline coordinates={navigation.remaining} strokeColor={colors.brand} strokeWidth={8} lineCap="round" lineJoin="round" />
+            <Polyline coordinates={navigation.remaining} strokeColor={colors.brand} strokeWidth={navigation.walking ? 9 : 8} lineCap="round" lineJoin="round" lineDashPattern={navigation.walking ? [1, 14] : undefined} />
             <Marker coordinate={navigation.destination} anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false} zIndex={90} accessibilityLabel={t('nav.destinationMarker')}>
               <DestinationFlag />
             </Marker>
@@ -166,7 +183,9 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
               <Polyline
                 coordinates={route.coordinates}
                 strokeColor={route.trafficState ? TRAFFIC_COLORS[route.trafficState] : colors.brand}
-                strokeWidth={5}
+                strokeWidth={route.walking ? 7 : 5}
+                lineCap="round"
+                lineDashPattern={route.walking ? [1, 12] : undefined}
               />
             )}
             {route.detourSegments?.map((line, index) => (

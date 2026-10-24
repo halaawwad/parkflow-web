@@ -1,3 +1,4 @@
+import type { TravelMode } from '@/types';
 import type { Maneuver, ManeuverKind } from './maneuvers';
 
 /**
@@ -36,9 +37,13 @@ export function speakableStreet(street: string, locale: GuidanceLocale): string 
   return LATIN.test(name) && !ARABIC.test(name) ? name : '';
 }
 
-/** Rounds a distance to what a person would say: 10 m steps, then 50 m, then 100 m, then 0.1 km. */
-export function roundSpokenDistance(meters: number): number {
-  if (meters < 100) return Math.max(10, Math.round(meters / 10) * 10);
+/**
+ * Rounds a distance to what a person would say: 10 m steps, then 50 m, then
+ * 100 m, then 0.1 km. Walking keeps 10 m steps up to 200 m: rounding 125 m up to
+ * "150" is nothing in a car but twenty seconds on foot.
+ */
+export function roundSpokenDistance(meters: number, profile: TravelMode = 'driving'): number {
+  if (meters < 100 || (profile === 'walking' && meters < 200)) return Math.max(10, Math.round(meters / 10) * 10);
   if (meters < 500) return Math.round(meters / 50) * 50;
   if (meters < 1000) return Math.round(meters / 100) * 100;
   return Math.round(meters / 100) * 100;
@@ -58,8 +63,8 @@ function arabicKilometers(km: number): string {
 }
 
 /** Distance as it should be spoken. */
-export function spokenDistance(meters: number, locale: GuidanceLocale): string {
-  const rounded = roundSpokenDistance(meters);
+export function spokenDistance(meters: number, locale: GuidanceLocale, profile: TravelMode = 'driving'): string {
+  const rounded = roundSpokenDistance(meters, profile);
   if (rounded >= 1000) {
     const km = Math.round(rounded / 100) / 10;
     if (locale === 'ar') return arabicKilometers(km);
@@ -152,9 +157,9 @@ const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1
 const sentence = (text: string) => `${text.replace(/[.\s]+$/, '')}.`;
 
 /** "In 150 meters, turn right onto Al-Quds Street." / "بعد 150 مترًا، انعطف يمينًا إلى شارع القدس." */
-export function approachPhrase(maneuver: Maneuver, meters: number, locale: GuidanceLocale): string {
+export function approachPhrase(maneuver: Maneuver, meters: number, locale: GuidanceLocale, profile: TravelMode = 'driving'): string {
   const instruction = maneuverInstruction(maneuver, locale, speakableStreet(maneuver.street, locale));
-  const distance = spokenDistance(meters, locale);
+  const distance = spokenDistance(meters, locale, profile);
   return sentence(locale === 'ar' ? `بعد ${distance}، ${instruction}` : `In ${distance}, ${lowerFirst(instruction)}`);
 }
 
@@ -167,9 +172,10 @@ export function actionPhrase(maneuver: Maneuver, locale: GuidanceLocale, then?: 
   return sentence(locale === 'ar' ? `${lead}، ثم ${next}` : `${lead}, then ${lowerFirst(next)}`);
 }
 
-/** "Continue straight for 1.2 kilometers." */
-export function continuePhrase(meters: number, locale: GuidanceLocale): string {
-  const distance = spokenDistance(meters, locale);
+/** "Continue straight for 1.2 kilometers." / walking: "Continue walking for 300 meters." */
+export function continuePhrase(meters: number, locale: GuidanceLocale, profile: TravelMode = 'driving'): string {
+  const distance = spokenDistance(meters, locale, profile);
+  if (profile === 'walking') return locale === 'ar' ? `تابع السير لمسافة ${distance}.` : `Continue walking for ${distance}.`;
   return locale === 'ar' ? `استمر للأمام لمسافة ${distance}.` : `Continue straight for ${distance}.`;
 }
 
@@ -180,12 +186,21 @@ export function arrivedPhrase(side: Maneuver['side'], locale: GuidanceLocale, wa
     : `You have arrived at your destination${sidePhrase(side, locale)}.`;
 }
 
+/** Status lines. Walking variants say so, so a pedestrian is never told about driving. */
 export const systemPhrases = {
-  start: (locale: GuidanceLocale) => (locale === 'ar' ? 'بدأت الملاحة.' : 'Navigation started.'),
-  rerouting: (locale: GuidanceLocale) => (locale === 'ar' ? 'جارٍ إعادة حساب المسار.' : 'Recalculating route.'),
+  start: (locale: GuidanceLocale, profile: TravelMode = 'driving') =>
+    profile === 'walking'
+      ? locale === 'ar' ? 'بدأت ملاحة المشي.' : 'Walking navigation started.'
+      : locale === 'ar' ? 'بدأت الملاحة.' : 'Navigation started.',
+  rerouting: (locale: GuidanceLocale, profile: TravelMode = 'driving') =>
+    profile === 'walking'
+      ? locale === 'ar' ? 'ابتعدت عن المسار. جاري حساب طريق جديد.' : 'You are off the route. Calculating a new walking route.'
+      : locale === 'ar' ? 'جارٍ إعادة حساب المسار.' : 'Recalculating route.',
   rerouted: (locale: GuidanceLocale) => (locale === 'ar' ? 'تم تحديث المسار.' : 'Route updated.'),
-  wrongWay: (locale: GuidanceLocale) =>
-    locale === 'ar' ? 'يبدو أنك تسير في الاتجاه المعاكس.' : 'You appear to be heading the wrong way.',
+  wrongWay: (locale: GuidanceLocale, profile: TravelMode = 'driving') =>
+    profile === 'walking'
+      ? locale === 'ar' ? 'يبدو أنك تمشي في الاتجاه المعاكس.' : 'You seem to be walking the wrong way.'
+      : locale === 'ar' ? 'يبدو أنك تسير في الاتجاه المعاكس.' : 'You appear to be heading the wrong way.',
   weakSignal: (locale: GuidanceLocale) =>
     locale === 'ar'
       ? 'إشارة الموقع ضعيفة. تم إيقاف الإرشاد مؤقتًا حتى تتحسن الإشارة.'

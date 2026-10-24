@@ -149,7 +149,12 @@ export interface RouteStep {
   leg: number;
 }
 
+/** How the trip is made. Walking routes follow footpaths and ignore one-way streets. */
+export type TravelMode = 'driving' | 'walking';
+
 export interface RouteRequestOptions {
+  /** Routing profile; driving when omitted. */
+  profile?: TravelMode;
   mode?: 'checkpoint-aware' | 'fastest';
   snapDestination?: boolean;
   maxAlternatives?: number;
@@ -178,6 +183,8 @@ export interface RouteResult {
   /** Real alternatives returned by the configured routing provider. */
   alternatives: RouteAlternative[];
   source: 'osrm' | 'straight-line';
+  /** Profile the provider routed with (absent from older servers, which only drive). */
+  profile?: TravelMode;
   /** Road-network point used by the router when the raw destination is off-road. */
   snappedDestination?: GeoPoint;
 }

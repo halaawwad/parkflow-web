@@ -50,7 +50,7 @@ import { useUnreadNotificationCount } from '@/hooks/useNotifications';
 import { useUserLocation } from '@/hooks/useUserLocation';
 import { useCreateRoadReport, useRoadReports } from '@/hooks/useRoadReports';
 import { DEFAULT_REGION, services } from '@/services';
-import type { CreateRoadReportInput, GeoPoint, GeoRegion, ParkingZone, RamallahParkingLocation, RoadReport, RoadReportType, RouteResult } from '@/types';
+import type { CreateRoadReportInput, GeoPoint, GeoRegion, ParkingZone, RamallahParkingLocation, RoadReport, RoadReportType, RouteResult, TravelMode } from '@/types';
 import { distanceMeters, distanceToPolyline } from '@/utils/geo';
 import { assessRouteAlternatives } from '@/utils/routeImpact';
 import { haptics } from '@/utils/haptics';
@@ -189,7 +189,10 @@ export default function MapScreen() {
   const [tripNeedsLoading, setTripNeedsLoading] = useState(false);
   const [tripNeedsError, setTripNeedsError] = useState(false);
   const [routeNeedsPlan, setRouteNeedsPlan] = useState<TripNeedsRoutePlan>();
-  const [activeRouteNeedsPlan, setActiveRouteNeedsPlan] = useState<TripNeedsRoutePlan>();
+  const [plannedRouteNeeds, setActiveRouteNeedsPlan] = useState<TripNeedsRoutePlan>();
+  /** Driving or walking. Trip-need stops are planned for a car, so a walk ignores them. */
+  const [travelMode, setTravelMode] = useState<TravelMode>('driving');
+  const activeRouteNeedsPlan = travelMode === 'walking' ? undefined : plannedRouteNeeds;
   const [routeNeedsDisplayMode, setRouteNeedsDisplayMode] = useState<RouteNeedsDisplayMode>('needs');
   const [routeNeedsLoading, setRouteNeedsLoading] = useState(false);
   const [routeNeedsError, setRouteNeedsError] = useState(false);
@@ -480,7 +483,7 @@ export default function MapScreen() {
   const { data: route, isFetching: routeLoading, isError: routeError } = useRoute(
     !activeRouteNeedsPlan && routeDestination ? routeOrigin : undefined,
     !activeRouteNeedsPlan ? routeDestination : undefined,
-    !activeRouteNeedsPlan && routeTarget ? FASTEST_PARKING_ROUTE : undefined,
+    !activeRouteNeedsPlan && routeTarget ? { ...FASTEST_PARKING_ROUTE, profile: travelMode } : undefined,
   );
   useEffect(() => {
     setRouteNeedsPlan(undefined);
@@ -513,7 +516,7 @@ export default function MapScreen() {
   useEffect(() => {
     setSelectedRouteId('current');
     setAlternativeDismissed(false);
-  }, [routeTarget?.type, routeTarget?.id, routeOrigin?.latitude, routeOrigin?.longitude]);
+  }, [routeTarget?.type, routeTarget?.id, routeOrigin?.latitude, routeOrigin?.longitude, travelMode]);
   useEffect(() => {
     if (routeError) setLocationMessage(t('ramallahParking.routeUnavailable'));
   }, [routeError, t]);
@@ -611,11 +614,12 @@ export default function MapScreen() {
         alternatives: alternativeLines
           .map(normalizeGeoPoints)
           .filter((line) => line.length >= 2),
+        walking: travelMode === 'walking',
       };
     },
-    [activeRouteNeedsPlan, displayedRoute, route, routeDestination, routeNeedsDisplayMode, selectedRouteId],
+    [activeRouteNeedsPlan, displayedRoute, route, routeDestination, routeNeedsDisplayMode, selectedRouteId, travelMode],
   );
-  const routeNeedsVisible = tripNeedsMode === 'route' && Boolean(routeTarget);
+  const routeNeedsVisible = tripNeedsMode === 'route' && Boolean(routeTarget) && travelMode !== 'walking';
   const visibleNeedStops = useMemo(
     () => routeNeedsVisible && routeNeedsDisplayMode === 'needs'
       ? tripNeedPlaces.map((place) => ({
@@ -1081,9 +1085,9 @@ export default function MapScreen() {
       name: routeTarget.name,
       via: needsRoute?.stops.map((stop) => stop.place.location),
       initialRoute: needsRoute ? undefined : displayedRoute,
-      routeOptions: { mode: FASTEST_PARKING_ROUTE.mode, snapDestination: FASTEST_PARKING_ROUTE.snapDestination },
+      routeOptions: { mode: FASTEST_PARKING_ROUTE.mode, snapDestination: FASTEST_PARKING_ROUTE.snapDestination, profile: travelMode },
     });
-  }, [activeRouteNeedsPlan, displayedRoute, navigation, routeNeedsDisplayMode, routeTarget]);
+  }, [activeRouteNeedsPlan, displayedRoute, navigation, routeNeedsDisplayMode, routeTarget, travelMode]);
 
   // Android back ends navigation instead of leaving the screen mid-drive.
   useEffect(() => {
@@ -1118,9 +1122,11 @@ export default function MapScreen() {
       remaining: split?.remaining ?? [],
       destination: navRoute?.destination ?? navTargetRef.current?.location ?? fix.point,
       follow: navigation.following,
+      walking: navState.profile === 'walking',
+      overview: navigation.overview,
       padding: { top: insets.top + 170, bottom: insets.bottom + 200 },
     };
-  }, [navActive, navState.route, navState.progress, navState.lastGoodFix, navState.lastFix, navState.heading, navState.status, navigation.following, insets.top, insets.bottom]);
+  }, [navActive, navState.route, navState.progress, navState.lastGoodFix, navState.lastFix, navState.heading, navState.status, navState.profile, navigation.following, navigation.overview, insets.top, insets.bottom]);
   const stopFollowing = navigation.setFollowing;
   const onUserPan = useCallback(() => stopFollowing(false), [stopFollowing]);
 
@@ -1344,6 +1350,8 @@ export default function MapScreen() {
             detailsExpanded={routeDetailsExpanded}
             onDetailsExpandedChange={setRouteDetailsExpanded}
             onClose={closeRoute}
+            travelMode={travelMode}
+            onTravelModeChange={setTravelMode}
             onStartNavigation={startNavigation}
             onOpenMaps={() => openInMaps(routeTarget)}
             onStartParking={routeZone ? () => startParking(routeZone) : undefined}
