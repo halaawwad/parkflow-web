@@ -1,3 +1,4 @@
+import { CheckpointReview } from './CheckpointReview';
 import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { Flag, ShieldAlert, UserRound } from 'lucide-react-native';
@@ -319,6 +320,7 @@ export function AdminReviews({ kind }: AdminReviewsProps) {
 
   return (
     <View style={{ gap: spacing.lg }}>
+      {kind === 'reports' ? <CheckpointReview /> : null}
       <View style={{ flexDirection: row, alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
         <View style={{ flex: 1, gap: spacing.xs }}>
           <AppText variant="h2">{kind === 'reports' ? labels.reports : labels.appeals}</AppText>

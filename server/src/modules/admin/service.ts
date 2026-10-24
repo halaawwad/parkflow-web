@@ -1,5 +1,6 @@
+import { broadcastCheckpointChange } from '../../realtime/socket';
 import type { Role,Prisma } from '@prisma/client';
-import { db,atomic,json,type Tx } from '../../database/client';
+import { db,atomic,lock,json,type Tx } from '../../database/client';
 import { assert,requireValue } from '../../utils/errors';
 import { notify } from '../notifications/service';
 import { post } from '../wallet/ledger';
@@ -27,7 +28,7 @@ export async function tariff(a:Actor,zoneId:string,input:Omit<Prisma.ParkingTari
 export async function hours(a:Actor,zoneId:string,rows:{weekday:number;opensAt:string;closesAt:string;closed:boolean}[]){return atomic(async tx=>{await zonePermission(tx,a,zoneId);const before=await tx.operatingHour.findMany({where:{zoneId}});await tx.operatingHour.deleteMany({where:{zoneId}});await tx.operatingHour.createMany({data:rows.map(r=>({...r,zoneId}))});await audit(tx,a,'update','operating-hours',zoneId,before,rows);return rows;});}
 export async function availability(a:Actor,zoneId:string,input:{availability:'available'|'limited'|'full'|'unknown';availableSpaces?:number;occupiedSpaces?:number;source:string;confidence:number}){return atomic(async tx=>{await zonePermission(tx,a,zoneId);const s=await tx.availabilitySnapshot.create({data:{zoneId,...input}});await audit(tx,a,'create','availability',s.id,null,s);await event(tx,'parking.availability.updated',{zoneId});return s;});}
 export async function reports(){return db.checkpointReport.findMany({take:200,orderBy:{reportedAt:'desc'},include:{checkpoint:{select:{nameEn:true,nameAr:true}},user:{select:{fullName:true}}}});}
-export async function moderate(a:Actor,id:string,hidden:boolean){return atomic(async tx=>{const before=await tx.checkpointReport.findUniqueOrThrow({where:{id}});const after=await tx.checkpointReport.update({where:{id},data:{hidden}});if(hidden)await tx.pointsEntry.updateMany({where:{roadReportId:id},data:{state:'revoked'}});await audit(tx,a,'moderate','road-report',id,before,after);await event(tx,'checkpoint.updated',{checkpointId:after.checkpointId});return after;});}
+export async function moderate(a:Actor,id:string,hidden:boolean){const result=await atomic(async tx=>{const before=await tx.checkpointReport.findUniqueOrThrow({where:{id}});const after=await tx.checkpointReport.update({where:{id},data:{hidden}});if(hidden)await tx.pointsEntry.updateMany({where:{roadReportId:id},data:{state:'revoked'}});await audit(tx,a,'moderate','road-report',id,before,after);await event(tx,'checkpoint.updated',{checkpointId:after.checkpointId});return after;});broadcastCheckpointChange(result.checkpointId);return result;}
 export async function violations(){return db.violation.findMany({take:200,orderBy:{issuedAt:'desc'}});}
 export async function issueViolation(a:Actor,input:Prisma.ViolationUncheckedCreateInput){return atomic(async tx=>{
  const vehicle=requireValue(await tx.vehicle.findUnique({where:{id:input.vehicleId}}));const v=await tx.violation.create({data:{...input,plateNumber:vehicle.plateNumber}});
@@ -52,3 +53,20 @@ export async function refund(a:Actor,id:string,reason:string,key:string){return 
  const entry=await post(tx,original.wallet.userId,{amount:-original.amount,type:'refund',title:reason,titleAr:reason,reference});await audit(tx,a,'refund','transaction',id,original,entry);return entry;
  });}
 export async function appeals(){return db.appeal.findMany({take:200,orderBy:{submittedAt:'desc'},include:{user:{select:{fullName:true,email:true}},violation:{select:{plateNumber:true,reason:true,reasonAr:true,amount:true,status:true}}}});}
+
+export async function checkpointCandidates(){return db.roadCheckpoint.findMany({orderBy:{nameAr:'asc'}});}
+export async function reviewCheckpoint(a:Actor,id:string,input:{latitude:number;longitude:number;directions:{id:string;nameAr:string;nameEn:string}[];coordinatesReviewed:true;enabledForLiveReporting:boolean}) {
+ assert(a.role==='ADMIN','FORBIDDEN','Administrator required',403);
+ const result=await atomic(async tx=>{
+  await lock(tx,`checkpoint:${id}`);
+  const before=requireValue(await tx.roadCheckpoint.findUnique({where:{id}}));
+  const old=Array.isArray(before.directions)?before.directions as unknown as {id:string;nameAr:string;nameEn:string}[]:[];
+  for(const d of input.directions){const prior=old.find(p=>p.id===d.id);assert(!prior || prior.nameAr===d.nameAr && prior.nameEn===d.nameEn,'VALIDATION','Use a new direction ID when changing a travel direction');}
+  const {coordinatesReviewed,...data}=input;
+  // Reviewed coordinates are changed only through this explicit administrator action.
+  const after=await tx.roadCheckpoint.update({where:{id},data:{...data,directions:json(data.directions),reviewedAt:new Date(),reviewedBy:a.userId}});
+  await audit(tx,a,'review-activate','checkpoint',id,before,after);
+  await event(tx,'checkpoint.updated',{checkpointId:id});return after;
+ });
+ broadcastCheckpointChange(id);return result;
+}

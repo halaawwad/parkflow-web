@@ -1,10 +1,12 @@
+import { useCheckpointConnectionStore } from '@/store/checkpointConnectionStore';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, Linking, Platform, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 
-import { Reveal } from '@/components/ui';
+import { Reveal, AppText } from '@/components/ui';
+import { radius } from '@/theme/radius';
 import { MapSurface } from '@/components/map/MapSurface';
 import type { MapCheckpoint, MapNavigation, MapRoute, MapSurfaceHandle } from '@/components/map/types';
 import { NavigationOverlay } from '@/components/map/navigation/NavigationOverlay';
@@ -233,15 +235,17 @@ export default function MapScreen() {
   const tourismPlacesActive = primaryMapCategory === 'tourism_places';
   const tourismPlaces = useTourismPlaces(tourismPlacesActive, region, tourismPlaceCategories);
   useEffect(() => { if (!evActive) setEvFiltersOpen(false); }, [evActive]);
+  const checkpointsEnabled = useMapLayersStore((state) => state.checkpointsEnabled);
   const roadReportsEnabled = useMapLayersStore((state) => state.roadReportsEnabled);
   const businessOffersEnabled = useMapLayersStore((state) => state.businessOffersEnabled);
   const accessibleParkingOnly = useMapLayersStore((state) => state.accessibleParkingOnly);
-  const enabledLayerCount = 1 + Number(roadReportsEnabled) + Number(businessOffersEnabled);
+  const enabledLayerCount = 1 + Number(checkpointsEnabled) + Number(roadReportsEnabled) + Number(businessOffersEnabled);
 
   const { vehicles, selected, select } = useSelectedVehicle();
   const { data: zones = [], isPending: zonesPending, isError: zonesError, refetch: refetchZones } = useZones();
   const { data: activeSessions = [] } = useActiveSessions();
-  const { data: checkpoints = [] } = useCheckpoints();
+  const { data: checkpoints = [], dataUpdatedAt: checkpointsUpdatedAt, isError: checkpointsError } = useCheckpoints();
+  const checkpointsConnected = useCheckpointConnectionStore(state=>state.connected);
   const { data: unreadCount = 0 } = useUnreadNotificationCount();
   // Location is deliberately opt-in: Ramallah remains the opening view until locate is pressed.
   const { location, status: locationStatus, request: requestLocation } = useUserLocation(false);
@@ -437,7 +441,7 @@ export default function MapScreen() {
   const alerts = useMemo(
     () =>
       checkpoints
-        .filter((checkpoint) => !checkpoint.assumed && checkpoint.status !== 'open')
+        .filter((checkpoint) => Number.isFinite(checkpoint.location?.latitude) && Number.isFinite(checkpoint.location?.longitude))
         .sort(
           (a, b) =>
             Number(b.status === 'closed') - Number(a.status === 'closed') ||
@@ -448,14 +452,14 @@ export default function MapScreen() {
 
   const mapCheckpoints = useMemo<MapCheckpoint[]>(
     () =>
-      alerts.filter((checkpoint) => !roadReports.some((report) => report.type === 'checkpoint' && distanceMeters(report, checkpoint.location) < 80)).map((checkpoint) => ({
+      alerts.map((checkpoint) => ({
         id: checkpoint.id,
-        name: locale === 'ar' ? checkpoint.nameAr : checkpoint.nameEn,
+        name: `${locale === 'ar' ? checkpoint.nameAr : checkpoint.nameEn}${!checkpoint.enabledForLiveReporting ? ` / ${t('roads.needsReview')}` : ''}`,
         location: checkpoint.location,
         status: checkpoint.status,
         assumed: checkpoint.assumed,
       })),
-    [alerts, locale, roadReports],
+    [alerts, locale, t],
   );
 
   const routeOrigin = useMemo<GeoPoint | undefined>(
@@ -1194,8 +1198,8 @@ export default function MapScreen() {
         userLocation={testLocationMode ? undefined : location}
         testLocation={testLocation}
         onRegionChangeComplete={setRegion}
-        checkpoints={routeNeedsVisible ? [] : mapCheckpoints}
-        onSelectCheckpoint={() => router.push('/roads')}
+        checkpoints={routeNeedsVisible || !checkpointsEnabled ? [] : mapCheckpoints}
+        onSelectCheckpoint={(checkpointId) => router.push({pathname:'/roads',params:{checkpointId}})}
         roadReports={!routeNeedsVisible && roadReportsEnabled ? roadReports : []}
         selectedRoadReportId={!routeNeedsVisible && roadReportsEnabled ? selectedReport?.id : undefined}
         onSelectRoadReport={(report) => {
@@ -1308,6 +1312,12 @@ export default function MapScreen() {
           paddingHorizontal: spacing.md,
         }}
       >
+        {checkpointsEnabled && !routeNeedsVisible && !reportLocationPicking && !reportStep && !selectedReport ? <View style={{backgroundColor:colors.surface,borderRadius:radius.md,padding:spacing.xs}}>
+          <AppText variant="caption">{t('roads.community')}</AppText>
+          {!checkpointsConnected || checkpointsError ? <AppText variant="caption">{t('roads.disconnected')}</AppText> : null}
+          {checkpointsUpdatedAt ? <AppText variant="caption">{t('roads.lastUpdate',{time:new Date(checkpointsUpdatedAt).toLocaleTimeString(locale)})}</AppText> : null}
+        </View> : null}
+
         {!reportLocationPicking && !reportStep && !selectedReport && bannerSession ? (
           <Reveal offset={10}>
             <ActiveSessionBanner

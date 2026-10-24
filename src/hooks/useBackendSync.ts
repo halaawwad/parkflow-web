@@ -1,3 +1,4 @@
+import { useCheckpointConnectionStore } from '@/store/checkpointConnectionStore';
 import { useEffect } from 'react';
 import { AppState,Platform } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
@@ -13,11 +14,12 @@ export function useBackendSync(){
  useEffect(()=>{if(!session||!API_BASE_URL)return;
  const socket=io(API_BASE_URL.replace(/\/api\/v1$/,''),{auth:{token:session.accessToken},transports:['websocket'],reconnection:true});
  const invalidate=(keys:string[])=>{for(const key of keys)void client.invalidateQueries({queryKey:[key]});};
- socket.on('checkpoint.updated',()=>invalidate(['roads','route']));socket.on('parking.availability.updated',()=>invalidate(['zones','zone']));socket.on('parking.session.updated',()=>invalidate(['sessions','session','wallet','transactions','trust']));socket.on('notification.created',(notification?:AppNotification)=>{invalidate(['notifications','wallet','transactions','violations','trust']);useInAppNotificationStore.getState().show(notification);});socket.on('trust.updated',()=>invalidate(['trust']));socket.on('connect',()=>void client.invalidateQueries());
- socket.on('connect_error',()=>{if(useAuthStore.getState().session&&sessionRefreshDelay(session)<=0)void refreshSession().catch(()=>undefined);});
+ socket.on('checkpoint.updated',()=>{void client.cancelQueries({queryKey:['roads','checkpoints']}).then(()=>invalidate(['roads','route']));});socket.on('parking.availability.updated',()=>invalidate(['zones','zone']));socket.on('parking.session.updated',()=>invalidate(['sessions','session','wallet','transactions','trust']));socket.on('notification.created',(notification?:AppNotification)=>{invalidate(['notifications','wallet','transactions','violations','trust']);useInAppNotificationStore.getState().show(notification);});socket.on('trust.updated',()=>invalidate(['trust']));socket.on('connect',()=>{useCheckpointConnectionStore.setState({connected:true});void client.invalidateQueries();});
+ socket.on('disconnect',()=>useCheckpointConnectionStore.setState({connected:false}));
+ socket.on('connect_error',()=>{useCheckpointConnectionStore.setState({connected:false});if(useAuthStore.getState().session&&sessionRefreshDelay(session)<=0)void refreshSession().catch(()=>undefined);});
  const timer=setTimeout(()=>{void refreshSession().catch(()=>undefined);},Math.max(1000,sessionRefreshDelay(session)));
  const subscription=AppState.addEventListener('change',state=>{if(state==='active'){void client.invalidateQueries();if(!socket.connected)socket.connect();}});
- return()=>{clearTimeout(timer);subscription.remove();socket.disconnect();};
+ return()=>{clearTimeout(timer);subscription.remove();useCheckpointConnectionStore.setState({connected:false});socket.disconnect();};
  },[session?.accessToken,client]);
  useEffect(()=>{if(!session?.userId||Platform.OS==='web')return;let token:string|undefined,cancelled=false;
  const register=async()=>{const Notifications=await import('expo-notifications');const Constants=(await import('expo-constants')).default;

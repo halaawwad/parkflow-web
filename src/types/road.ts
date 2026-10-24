@@ -2,8 +2,19 @@ import type { AppNotification } from './notification';
 import type { GeoPoint, ID, ISODateString } from './common';
 import type { AvailabilityLevel } from './parking';
 
-/** Driver-reported state of a checkpoint. "open" is also the assumed default. */
-export type CheckpointStatus = 'open' | 'congested' | 'closed';
+/** Unknown means no fresh evidence; conflicting means unresolved opposing observations. */
+export type CheckpointReportStatus = 'open' | 'congested' | 'severe' | 'closed';
+export type CheckpointStatus = CheckpointReportStatus | 'unknown' | 'conflicting';
+export interface CheckpointDirection {
+  id: string; nameAr: string; nameEn: string; status: CheckpointStatus;
+  confidence: 'unknown' | 'unconfirmed' | 'confirmed' | 'conflicting';
+  confirmationCount: number; reportCount: number; lastObservedAt: string | null; expiresAt: string | null;
+  reports: {id:string;isConfirmation:boolean;status:CheckpointReportStatus;note:string|null;observedAt:string;locationVerified:boolean}[];
+}
+export interface CheckpointObservation {
+  directionId: string; observedAt: string; note?: string; unverified: boolean;
+  location?: {latitude:number;longitude:number;accuracy:number;capturedAt:string};
+}
 
 export interface Checkpoint {
   id: ID;
@@ -13,8 +24,13 @@ export interface Checkpoint {
 }
 
 export interface CheckpointState extends Checkpoint {
+  enabledForLiveReporting?: boolean;
+  kind?: 'checkpoint' | 'road_gate';
+  sourceReferences?: unknown[];
+  directions?: CheckpointDirection[];
+  generatedAt?: string;
   status: CheckpointStatus;
-  /** True when there is no recent report and "open" is only an assumption. */
+  /** True when a location-wide state cannot be treated as confirmed. */
   assumed: boolean;
   /** Minutes since the newest report; undefined when there are none. */
   minutesSinceReport?: number;
@@ -25,6 +41,8 @@ export interface CheckpointState extends Checkpoint {
 export interface RoadEvent {
   id: ID;
   checkpointId: ID;
+  directionId?: string;
+  observedAt?: ISODateString;
   status: CheckpointStatus;
   /** Absent for the demo's seeded "other drivers" reports. */
   userId?: ID;
@@ -122,7 +140,7 @@ export interface RouteClosure {
   checkpointId: ID;
   nameAr: string;
   nameEn: string;
-  status: Exclude<CheckpointStatus, 'open'>;
+  status: 'closed' | 'congested';
 }
 
 /**

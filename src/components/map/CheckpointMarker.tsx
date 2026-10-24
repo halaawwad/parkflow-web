@@ -1,5 +1,5 @@
 import { View } from 'react-native';
-import { ShieldCheck, ShieldX, TrafficCone } from 'lucide-react-native';
+import { ShieldCheck, ShieldX, TrafficCone, CircleHelp } from 'lucide-react-native';
 import { AppText } from '@/components/ui/AppText';
 import { useTheme } from '@/theme/ThemeProvider';
 import type { ColorScheme } from '@/theme/colors';
@@ -12,9 +12,9 @@ export function checkpointColor(
   assumed: boolean,
   colors: ColorScheme,
 ): string {
-  if (assumed) return colors.textTertiary;
+  if (assumed || status === 'unknown' || status === 'conflicting') return colors.textTertiary;
   if (status === 'closed') return colors.danger;
-  if (status === 'congested') return colors.warning;
+  if ((status === 'congested' || status === 'severe')) return colors.warning;
   return colors.success;
 }
 
@@ -27,7 +27,7 @@ export function CheckpointIcon({
   color: string;
   size?: number;
 }) {
-  const Icon = status === 'closed' ? ShieldX : status === 'congested' ? TrafficCone : ShieldCheck;
+  const Icon = status === 'unknown' || status === 'conflicting' ? CircleHelp : status === 'closed' ? ShieldX : (status === 'congested' || status === 'severe') ? TrafficCone : ShieldCheck;
   return <Icon size={size} color={color} strokeWidth={2.4} />;
 }
 
