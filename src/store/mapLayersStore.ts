@@ -13,6 +13,7 @@ import {
 
 interface PersistedMapLayers {
   primaryCategory: PrimaryMapCategory;
+  checkpointsEnabled: boolean;
   roadReportsEnabled: boolean;
   businessOffersEnabled: boolean;
   accessibleParkingOnly: boolean;
@@ -22,6 +23,7 @@ interface PersistedMapLayers {
 
 interface MapLayersState extends PersistedMapLayers {
   setPrimaryCategory: (category: PrimaryMapCategory) => void;
+  setCheckpointsEnabled: (enabled: boolean) => void;
   setRoadReportsEnabled: (enabled: boolean) => void;
   setBusinessOffersEnabled: (enabled: boolean) => void;
   setAccessibleParkingOnly: (enabled: boolean) => void;
@@ -32,6 +34,7 @@ interface MapLayersState extends PersistedMapLayers {
 
 const defaults: PersistedMapLayers = {
   primaryCategory: 'parking',
+  checkpointsEnabled: true,
   roadReportsEnabled: true,
   businessOffersEnabled: false,
   accessibleParkingOnly: false,
@@ -46,6 +49,7 @@ export const useMapLayersStore = create<MapLayersState>()(
       setPrimaryCategory: (primaryCategory) => {
         if (isAvailablePrimaryCategory(primaryCategory)) set({ primaryCategory });
       },
+      setCheckpointsEnabled: (checkpointsEnabled) => set({ checkpointsEnabled }),
       setRoadReportsEnabled: (roadReportsEnabled) => set({ roadReportsEnabled }),
       setBusinessOffersEnabled: (businessOffersEnabled) => {
         if (BUSINESS_OFFERS_AVAILABLE) set({ businessOffersEnabled });
@@ -58,8 +62,9 @@ export const useMapLayersStore = create<MapLayersState>()(
     {
       name: STORAGE_KEYS.mapLayers,
       storage: createJSONStorage(() => appStorage),
-      partialize: ({ primaryCategory, roadReportsEnabled, businessOffersEnabled, accessibleParkingOnly, carServiceCategory, tourismPlaceCategories }) => ({
+      partialize: ({ primaryCategory, checkpointsEnabled, roadReportsEnabled, businessOffersEnabled, accessibleParkingOnly, carServiceCategory, tourismPlaceCategories }) => ({
         primaryCategory,
+        checkpointsEnabled,
         roadReportsEnabled,
         businessOffersEnabled,
         accessibleParkingOnly,
@@ -76,6 +81,7 @@ export const useMapLayersStore = create<MapLayersState>()(
           primaryCategory: isAvailablePrimaryCategory(stored.primaryCategory)
             ? stored.primaryCategory
             : defaults.primaryCategory,
+          checkpointsEnabled: typeof stored.checkpointsEnabled === 'boolean' ? stored.checkpointsEnabled : defaults.checkpointsEnabled,
           roadReportsEnabled: typeof stored.roadReportsEnabled === 'boolean'
             ? stored.roadReportsEnabled
             : defaults.roadReportsEnabled,

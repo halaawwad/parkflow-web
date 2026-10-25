@@ -63,6 +63,7 @@ enum TransactionStatus {
 enum CheckpointStatus {
   open
   congested
+  severe
   closed
 }
 
@@ -680,6 +681,13 @@ model PermitZone {
 }
 
 model RoadCheckpoint {
+  kind String @default("checkpoint")
+  sourceReferences Json @default("[]")
+  enabledForLiveReporting Boolean @default(false)
+  directions Json @default("[]")
+  reviewedAt DateTime?
+  reviewedBy String?
+  nextExpiryAt DateTime?
   id        String             @id @default(uuid())
   nameAr    String
   nameEn    String
@@ -694,6 +702,16 @@ model RoadCheckpoint {
 }
 
 model CheckpointReport {
+  directionId String?
+  observedAt DateTime @default(now())
+  note String?
+  locationVerified Boolean @default(false)
+  parentId String?
+  parent CheckpointReport? @relation("CheckpointConfirmations", fields: [parentId], references: [id])
+  confirmations CheckpointReport[] @relation("CheckpointConfirmations")
+
+  @@unique([parentId, userId])
+  @@index([checkpointId, directionId, observedAt])
   id           String           @id @default(uuid())
   userId       String
   user         User             @relation(fields: [userId], references: [id])

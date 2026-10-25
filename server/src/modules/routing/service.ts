@@ -187,12 +187,12 @@ async function snapToDrivableRoad(point: GeoPoint): Promise<GeoPoint> {
 
 function closuresNear(line: GeoPoint[], states: CheckpointState[]): RouteClosure[] {
   return states
-    .filter((s) => s.status !== 'open' && distanceToPolyline(s.location, line) <= NEAR_METERS)
+    .filter((s) => !s.assumed && (s.status === 'closed' || s.status === 'congested' || s.status === 'severe') && distanceToPolyline(s.location, line) <= NEAR_METERS)
     .map((s) => ({
       checkpointId: s.id,
       nameAr: s.nameAr,
       nameEn: s.nameEn,
-      status: s.status as RouteClosure['status'],
+      status: s.status === 'severe' ? 'congested' : s.status as RouteClosure['status'],
     }));
 }
 

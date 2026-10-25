@@ -33,6 +33,8 @@ export function MapLayersSheet({ visible, onClose }: { visible: boolean; onClose
   const { colors } = useTheme();
   const { t, row } = useLocale();
   const primaryCategory = useMapLayersStore((state) => state.primaryCategory);
+  const checkpointsEnabled = useMapLayersStore((state) => state.checkpointsEnabled);
+  const setCheckpointsEnabled = useMapLayersStore((state) => state.setCheckpointsEnabled);
   const roadReportsEnabled = useMapLayersStore((state) => state.roadReportsEnabled);
   const businessOffersEnabled = useMapLayersStore((state) => state.businessOffersEnabled);
   const accessibleParkingOnly = useMapLayersStore((state) => state.accessibleParkingOnly);
@@ -155,6 +157,7 @@ export function MapLayersSheet({ visible, onClose }: { visible: boolean; onClose
 
         <View style={{ gap: spacing.xs }}>
           <AppText variant="label" color="textSecondary">{t('mapLayers.overlays')}</AppText>
+          {overlayRow(t('roads.checkpoints'), <TriangleAlert size={18} color={colors.warningText} />, checkpointsEnabled, setCheckpointsEnabled, true)}
           {overlayRow(t('mapLayers.roadReports'), <TriangleAlert size={18} color={colors.warningText} />, roadReportsEnabled, setRoadReportsEnabled, true)}
           {overlayRow(t('mapLayers.businessOffers'), <BadgePercent size={18} color={colors.textTertiary} />, businessOffersEnabled, setBusinessOffersEnabled, BUSINESS_OFFERS_AVAILABLE)}
           {primaryCategory === 'parking'

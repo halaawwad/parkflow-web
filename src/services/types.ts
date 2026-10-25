@@ -1,3 +1,4 @@
+import type { CheckpointObservation, CheckpointReportStatus } from '@/types/road';
 import type {
   Appeal,
   AppealAttachment,
@@ -5,7 +6,6 @@ import type {
   AppNotification,
   AuthSession,
   CheckpointState,
-  CheckpointStatus,
   GeoPoint,
   NotificationPreferences,
   OtpChallenge,
@@ -216,13 +216,14 @@ export interface ProfileService {
 
 /** Checkpoint status from one-tap driver reports. */
 export interface RoadService {
-  listCheckpoints(): Promise<CheckpointState[]>;
+  listCheckpoints(signal?: AbortSignal): Promise<CheckpointState[]>;
+  confirm(input: CheckpointObservation & {checkpointId:string;reportId:string}): Promise<unknown>;
   feed(limit?: number): Promise<RoadFeedItem[]>;
   report(input: {
     userId: string;
     checkpointId: string;
-    status: CheckpointStatus;
-  }): Promise<{ event: RoadFeedItem; points?: AwardedPoints }>;
+    status: CheckpointReportStatus;
+  } & CheckpointObservation): Promise<{ event: RoadFeedItem; points?: AwardedPoints }>;
   reportZone(input: {
     userId: string;
     zoneId: string;

@@ -4,6 +4,8 @@ const optional = z.string().optional();
 export const env = z.object({
  NODE_ENV:z.enum(['development','test','production']).default('development'), PORT:z.coerce.number().default(4000),
  DEV_SKIP_EMAIL_OTP:z.enum(['true','false']).default('false').transform(v=>v==='true'),
+ CHECKPOINT_FRESHNESS_MINUTES:z.coerce.number().int().min(1).max(120).default(20),
+ CHECKPOINT_RADIUS_METERS:z.coerce.number().min(100).max(10000).default(1500),
  DATABASE_URL:z.string().min(1), REDIS_URL:z.string().url(),
  GEMINI_API_KEY:optional, GEMINI_MODEL:z.string().regex(/^[a-zA-Z0-9._-]+$/).default('gemini-2.5-flash'),
  // Navigation voice (Gemini text-to-speech). Uses the same GEMINI_API_KEY.

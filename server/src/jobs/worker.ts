@@ -7,6 +7,7 @@ import { maintenanceQueue,pushQueue } from './queues';
 import { startRedisMemoryMonitor } from './redisMemory';
 import { expireSessions } from '../modules/sessions/service';
 import { checkOverstays } from '../modules/gates/service';
+import { expireCheckpoints } from '../modules/roads/live';
 import { verifyPoints } from '../modules/roads/service';
 import { processWebhooks,topup } from '../modules/wallet/service';
 import { recalculate } from '../modules/trust/service';
@@ -20,7 +21,7 @@ export async function drainOutbox(){const events=await db.outboxEvent.findMany({
  if(e.topic==='notification.created')await pushQueue.add('deliver',{notificationId:(e.payload as {id:string}).id},{jobId:e.id});
  await db.outboxEvent.update({where:{id:e.id},data:{deliveredAt:new Date()}});
 }}
-async function maintenance(){await expireSessions();await checkOverstays();await verifyPoints();await processWebhooks();
+async function maintenance(){await expireCheckpoints();await expireSessions();await checkOverstays();await verifyPoints();await processWebhooks();
  const pending=await db.payment.findMany({where:{status:'pending'},include:{method:true},take:50});for(const p of pending){try{await topup(p.method.userId,{amount:p.amount,paymentMethodId:p.paymentMethodId},p.idempotencyKey.slice(p.method.userId.length+1));}catch(e){logger.warn({paymentId:p.id},'Payment is not yet settled');}}
  const wallets=await db.wallet.findMany({where:{autoTopUpEnabled:true},take:500});for(const w of wallets){if(w.balance>=w.autoTopUpThreshold||!w.defaultPaymentMethodId)continue;try{await topup(w.userId,{amount:w.autoTopUpAmount,paymentMethodId:w.defaultPaymentMethodId},`auto-${w.id}-${w.updatedAt.getTime()}`);}catch{await atomic(tx=>notify(tx,w.userId,'payment_failed','Automatic top-up failed','فشل الشحن التلقائي','Check your payment method.','تحقق من طريقة الدفع.','/wallet',`auto-failed:${w.id}:${w.updatedAt.getTime()}`));}}
  const expired=await db.permit.updateMany({where:{status:'active',validTo:{lt:new Date()}},data:{status:'expired'}});

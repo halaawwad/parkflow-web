@@ -7,7 +7,7 @@ export const API_BASE_URL=process.env.EXPO_PUBLIC_API_BASE_URL?.replace(/\/$/,''
 const COLD_START_TIMEOUT_MS=75000, WARM_TIMEOUT_MS=20000, IDLE_MS=5*60000, SLOW_REQUEST_MS=8000;
 let lastResponseAt=0;
 let refreshing:{token:string;promise:Promise<AuthSession>}|undefined;
-interface Options {method?:string;body?:unknown;key?:string;public?:boolean;form?:FormData;retry?:boolean}
+interface Options {signal?:AbortSignal;method?:string;body?:unknown;key?:string;public?:boolean;form?:FormData;retry?:boolean}
 const codes:Record<string,AppErrorCode>={UNAUTHORIZED:'unauthorized',NOT_FOUND:'not_found',INSUFFICIENT_FUNDS:'insufficient_funds',PAYMENT_FAILED:'payment_failed',VALIDATION:'validation'};
 export function sessionRefreshDelay(session:AuthSession):number{
  // The final access token already ends at the absolute deadline. Wait for that
@@ -47,6 +47,9 @@ export async function api<T>(path:string,options:Options={}):Promise<T>{
  let session=useAuthStore.getState().session;
  if(!options.public&&session&&sessionRefreshDelay(session)<=0){session=await refreshSession();}
  const controller=new AbortController();
+ const cancel=()=>controller.abort();
+ options.signal?.addEventListener('abort',cancel,{once:true});
+ if(options.signal?.aborted)controller.abort();
  const timeoutMs=path==='/auth/refresh'||Date.now()-lastResponseAt>=IDLE_MS?COLD_START_TIMEOUT_MS:WARM_TIMEOUT_MS;
  const timeout=setTimeout(()=>controller.abort(),timeoutMs);
  let shownSlow=false;
@@ -57,7 +60,7 @@ export async function api<T>(path:string,options:Options={}):Promise<T>{
   response=await fetch(API_BASE_URL+path,{method:options.method??'GET',headers:{...(!options.form?{'Content-Type':'application/json'}:{}),...(!options.public&&session?{Authorization:`Bearer ${session.accessToken}`} :{}),...(options.key?{'Idempotency-Key':options.key}:{})},body:options.form??(options.body===undefined?undefined:JSON.stringify(options.body)),signal:controller.signal});
   data=await response.json();
  }catch{throw new AppError('network','Could not reach the ParkFlow backend. Please try again; your session is preserved');}
- finally{clearTimeout(timeout);clearTimeout(slow);if(shownSlow)useApiConnectionStore.setState(s=>({slowRequests:Math.max(0,s.slowRequests-1)}));}
+ finally{options.signal?.removeEventListener('abort',cancel);clearTimeout(timeout);clearTimeout(slow);if(shownSlow)useApiConnectionStore.setState(s=>({slowRequests:Math.max(0,s.slowRequests-1)}));}
  if(!options.public&&session&&useAuthStore.getState().session?.userId!==session.userId)throw new AppError('network','Session changed while reconnecting');
  const error=data&&typeof data==='object'&&'error' in data?data.error as {code?:string;message?:string;details?:Record<string,unknown>}|null:undefined;
  const confirmedUnauthorized=response.status===401&&error?.code==='UNAUTHORIZED';

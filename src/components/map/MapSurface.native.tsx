@@ -211,7 +211,7 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
 
         {checkpoints?.map((checkpoint) => (
           <Marker
-            key={checkpoint.id}
+            key={`${checkpoint.id}-${checkpoint.status}-${checkpoint.assumed}-${checkpoint.name}`}
             coordinate={checkpoint.location}
             onPress={(event) => {
               event.stopPropagation();
