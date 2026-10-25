@@ -28,6 +28,7 @@ import {
   Avatar,
   BottomSheet,
   Card,
+  HeroSurface,
   Divider,
   ListItem,
   Screen,
@@ -59,7 +60,9 @@ function MenuIcon({ children }: { children: React.ReactNode }) {
         borderRadius: radius.md,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: colors.surfaceAlt,
+        backgroundColor: colors.brandSofter,
+        borderWidth: 1,
+        borderColor: colors.brandSoft,
       }}
     >
       {children}
@@ -93,7 +96,7 @@ export default function ProfileScreen() {
     router.replace('/(onboarding)/welcome');
   };
 
-  const iconProps = { size: 19, color: colors.textSecondary, strokeWidth: 2.1 } as const;
+  const iconProps = { size: 19, color: colors.brand, strokeWidth: 2.1 } as const;
 
   return (
     <Screen layout="fixed" safeBottom={false}>
@@ -106,22 +109,25 @@ export default function ProfileScreen() {
       >
         <TabHeader title={t('profile.title')} />
 
-        <Card padding="xl" style={{ alignItems: 'center', gap: spacing.md }}>
-          <Avatar name={user?.fullName} size={76} />
+        <HeroSurface padding="xl" contentStyle={{ alignItems: 'center', gap: spacing.md }}>
+          {/* A brass ring sets the initials apart from the deep surface. */}
+          <View style={{ padding: 3, borderRadius: 999, borderWidth: 1.5, borderColor: colors.accent }}>
+            <Avatar name={user?.fullName} size={76} tone="surface" />
+          </View>
           <View style={{ gap: 4, alignItems: 'center' }}>
-            <AppText variant="h2" align="center">
+            <AppText variant="h2" align="center" color="onDeep">
               {user?.fullName}
             </AppText>
-            <AppText variant="body" color="textSecondary" numeric align="center">
+            <AppText variant="body" color="onDeepMuted" numeric align="center">
               {user?.email}
             </AppText>
           </View>
           {user?.createdAt ? (
-            <AppText variant="caption" color="textTertiary" align="center">
+            <AppText variant="caption" color="onDeepMuted" align="center">
               {t('profile.memberSince')} {formatDate(user.createdAt, dateLocale)}
             </AppText>
           ) : null}
-        </Card>
+        </HeroSurface>
 
         {user?.role === 'ADMIN' || user?.role === 'PARKING_OPERATOR' || managementAccess.data?.hasAccess ? (
           <Card padding="lg" style={{ paddingVertical: spacing.xs }}>

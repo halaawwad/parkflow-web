@@ -65,7 +65,7 @@ export function AppButton({
           container: {
             backgroundColor: colors.surface,
             borderWidth: StyleSheet.hairlineWidth * 2,
-            borderColor: colors.border,
+            borderColor: colors.borderStrong,
             ...shadow.xs,
           } as ViewStyle,
           textColor: colors.text,
@@ -92,7 +92,7 @@ export function AppButton({
         };
       case 'danger':
         return {
-          container: { backgroundColor: colors.dangerSoft } as ViewStyle,
+          container: { backgroundColor: colors.dangerSoft, borderWidth: StyleSheet.hairlineWidth * 2, borderColor: colors.dangerSoft } as ViewStyle,
           textColor: colors.dangerText,
           spinnerColor: colors.dangerText,
         };

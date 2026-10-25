@@ -1242,6 +1242,8 @@ export default function MapScreen() {
           paddingTop: insets.top + spacing.sm,
           paddingHorizontal: screenPadding,
           gap: spacing.sm,
+          // Search suggestions open downward over the bottom panels, so this layer sits above them.
+          zIndex: 5,
         }}
       >
         <Reveal offset={8}>

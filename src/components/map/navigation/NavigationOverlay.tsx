@@ -22,7 +22,7 @@ import {
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AppButton, AppText, BottomSheet, PressableScale, Reveal, SwitchRow } from '@/components/ui';
+import { AppButton, AppText, BottomSheet, ContourLines, PressableScale, Reveal, SwitchRow } from '@/components/ui';
 import { useLocale } from '@/hooks/useLocale';
 import type { TurnByTurnNavigation } from '@/hooks/useTurnByTurnNavigation';
 import type { TranslationKey } from '@/i18n';
@@ -93,6 +93,7 @@ const GuidanceCard = memo(function GuidanceCard({
       accessibilityLabel={reliable ? t('nav.cardLabel', { distance: spokenDistance(distance, locale), instruction }) : instruction}
       style={[styles.card, { backgroundColor: colors.deep, opacity: reliable ? 1 : 0.62 }, shadow.lg]}
     >
+      <ContourLines style={{ opacity: 0.7 }} />
       <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.md, padding: spacing.lg }}>
         <View style={[styles.iconTile, { backgroundColor: 'rgba(255,255,255,0.13)' }]}>
           <ManeuverIcon kind={maneuver.kind} exit={maneuver.exit} size={54} color={colors.onDeep} ghostColor="rgba(255,255,255,0.32)" />

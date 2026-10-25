@@ -38,10 +38,16 @@ export function Card({
       : tone === 'sunken'
         ? { backgroundColor: colors.surfaceSunken }
         : tone === 'brand'
-          ? { backgroundColor: colors.brandSofter }
+          ? { backgroundColor: colors.brandSofter, borderWidth: StyleSheet.hairlineWidth * 2, borderColor: colors.brandSoft }
           : tone === 'plain'
-            ? { backgroundColor: colors.surface }
-            : { backgroundColor: colors.surface, ...shadow[elevation ?? 'sm'] };
+            ? { backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth * 2, borderColor: colors.divider }
+            : {
+                // A hairline edge keeps a raised card crisp where its shadow is faint.
+                backgroundColor: colors.surface,
+                borderWidth: StyleSheet.hairlineWidth * 2,
+                borderColor: colors.divider,
+                ...shadow[elevation ?? 'sm'],
+              };
 
   const content = (
     <View
