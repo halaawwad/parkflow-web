@@ -13,6 +13,7 @@ import * as violations from '../../modules/violations/service';
 import * as notifications from '../../modules/notifications/service';
 import * as admin from '../../modules/admin/service';
 import { routingService } from '../../modules/routing/service';
+import { summarizeRoute } from '../../modules/routing/summary';
 route('get','/roads/checkpoints',empty,()=>roads.checkpoints());
 route('get','/roads/reports',z.object({limit}).strict(),(_r,b)=>roads.feed(b.limit));
 const observation=z.object({directionId:id,observedAt:z.iso.datetime(),note:z.string().trim().max(200).optional(),unverified:z.boolean(),location:geo.extend({accuracy:z.number().min(0).max(100000),capturedAt:z.iso.datetime()}).strict().optional()});
@@ -26,6 +27,7 @@ route(
   z.object({
     origin: geo,
     destination: geo,
+    profile: z.enum(['driving', 'walking']).optional(),
     mode: z.enum(['checkpoint-aware', 'fastest']).optional(),
     snapDestination: z.boolean().optional(),
     maxAlternatives: z.number().int().min(0).max(2).optional(),
@@ -34,6 +36,20 @@ route(
     via: z.array(geo).max(5).optional(),
   }).strict(),
   (_r, b) => routingService.getRoute(b.origin, b.destination, b),
+);
+// Optional AI overview of a planned route. The client sends the provider's own instructions; nothing is routed here.
+route(
+  'post',
+  '/routes/summary',
+  z.object({
+    profile: z.enum(['driving', 'walking']),
+    locale: z.enum(['ar', 'en']),
+    destinationName: z.string().trim().min(1).max(120),
+    distanceMeters: z.number().min(0).max(500_000),
+    durationSeconds: z.number().min(0).max(200_000),
+    steps: z.array(z.object({ instruction: z.string().trim().min(1).max(160), distanceMeters: z.number().min(0).max(500_000) }).strict()).min(1).max(60),
+  }).strict(),
+  (_r, b) => summarizeRoute(b),
 );
 route('get','/trust/me',empty,r=>trust.computeTrust(user(r)));
 route('get','/points/me',empty,async r=>(await trust.computeTrust(user(r))).recent);

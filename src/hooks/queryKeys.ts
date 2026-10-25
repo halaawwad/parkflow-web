@@ -44,8 +44,8 @@ export const queryKeys = {
   roadReportLists: () => ['road-reports', 'list'] as const,
   roadReports: (bounds: RoadReportBounds) => ['road-reports', 'list', bounds.north, bounds.south, bounds.east, bounds.west] as const,
   roadReport: (reportId: string) => ['road-reports', 'detail', reportId] as const,
-  route: (from?: GeoPoint, to?: GeoPoint, mode = 'checkpoint-aware') =>
-    ['route', pointKey(from), pointKey(to), mode] as const,
+  route: (from?: GeoPoint, to?: GeoPoint, mode = 'checkpoint-aware', profile = 'driving') =>
+    ['route', pointKey(from), pointKey(to), mode, profile] as const,
   trust: (userId: string) => ['trust', userId] as const,
 
   rideSearch: (search: { from?: string; to?: string; after?: string; before?: string }) =>

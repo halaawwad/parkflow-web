@@ -1,8 +1,11 @@
 import { memo, useMemo, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import {
+  Car,
   CircleCheck,
   CloudOff,
+  Footprints,
+  Map as MapIcon,
   ListOrdered,
   LocateFixed,
   MapPinOff,
@@ -29,7 +32,8 @@ import { shadow } from '@/theme/shadows';
 import { spacing } from '@/theme/spacing';
 import { displayDistance, localizedStreet, maneuverInstruction, spokenDistance, type GuidanceLocale } from '@/utils/navigation/instructions';
 import type { Maneuver } from '@/utils/navigation/maneuvers';
-import { guidanceReliable } from '@/utils/navigation/session';
+import { estimatedRemainingSeconds, guidanceReliable } from '@/utils/navigation/session';
+import { TravelModeToggle } from '../TravelModeToggle';
 import { followingManeuver } from '@/utils/navigation/voiceScheduler';
 import { ManeuverIcon } from './ManeuverIcon';
 
@@ -230,6 +234,14 @@ function StepsSheet({ nav, visible, onClose }: { nav: TurnByTurnNavigation; visi
         ))}
       </ScrollView>
       <View style={{ gap: spacing.sm, paddingTop: spacing.md }}>
+        <AppText variant="label" color="textSecondary">{t('travelMode.label')}</AppText>
+        <TravelModeToggle
+          value={nav.profile}
+          onChange={(mode) => {
+            onClose();
+            nav.switchProfile(mode);
+          }}
+        />
         <SwitchRow
           label={t('nav.vibration')}
           description={nav.vibration ? t('nav.vibrationOn') : t('nav.vibrationOff')}
@@ -306,8 +318,14 @@ export function NavigationOverlay({
     'no-guidance': ['nav.errorNoGuidanceTitle', 'nav.errorNoGuidanceBody'],
   };
 
-  const eta = progress ? formatEta(progress.remainingSeconds, dateLocale) : '';
-  const remainingTime = progress ? formatDuration(progress.remainingSeconds, t) : '';
+  // Walking blends the router's estimate with the walker's measured pace; driving uses the router's.
+  const remainingSeconds = estimatedRemainingSeconds(state) ?? 0;
+  const eta = progress ? formatEta(remainingSeconds, dateLocale) : '';
+  const remainingTime = progress ? formatDuration(remainingSeconds, t) : '';
+  const walking = state.profile === 'walking';
+  const accuracy = state.lastFix?.accuracy ?? null;
+  // Accuracy is only worth showing when it is poor enough to affect guidance.
+  const accuracyShown = accuracy !== null && accuracy > 15 && state.signal !== 'lost';
   const remainingDistance = progress ? distanceText(progress.remainingMeters, locale) : '';
 
   return (
@@ -324,6 +342,18 @@ export function NavigationOverlay({
       </View>
 
       <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: bottomOffset + Math.max(insets.bottom, spacing.md), paddingHorizontal: spacing.md, gap: spacing.sm }}>
+        {route && state.status !== 'arrived' && state.status !== 'error' && !nav.overview ? (
+          <PressableScale
+            testID="navigation-overview"
+            onPress={nav.showOverview}
+            accessibilityRole="button"
+            accessibilityLabel={t('nav.viewRouteLabel')}
+            style={[styles.recenter, { flexDirection: row, alignSelf: isRTL ? 'flex-start' : 'flex-end', backgroundColor: colors.surface }, shadow.md]}
+          >
+            <MapIcon size={19} color={colors.text} strokeWidth={2.3} />
+            <AppText variant="label">{t('nav.viewRoute')}</AppText>
+          </PressableScale>
+        ) : null}
         {!nav.following && route && state.status !== 'arrived' ? (
           <PressableScale
             testID="navigation-recenter"
@@ -390,6 +420,30 @@ export function NavigationOverlay({
         ) : route && progress ? (
           <Reveal offset={12}>
             <Panel testID="navigation-trip-panel">
+              <View style={{ flexDirection: row, alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }}>
+                <View
+                  testID="navigation-mode"
+                  accessible
+                  accessibilityLabel={t(walking ? 'travelMode.walking' : 'travelMode.driving')}
+                  style={[styles.chip, { flexDirection: row, backgroundColor: colors.brandSoft }]}
+                >
+                  {walking ? <Footprints size={14} color={colors.brand} strokeWidth={2.4} /> : <Car size={14} color={colors.brand} strokeWidth={2.4} />}
+                  <AppText variant="caption" color="brand" weight="bold">{t(walking ? 'travelMode.walking' : 'travelMode.driving')}</AppText>
+                </View>
+                {accuracyShown ? (
+                  <View
+                    testID="navigation-accuracy"
+                    accessible
+                    accessibilityLabel={t('nav.accuracyLabel', { meters: Math.round(accuracy!) })}
+                    style={[styles.chip, { flexDirection: row, backgroundColor: accuracy! > 30 ? colors.warningSoft : colors.surfaceAlt }]}
+                  >
+                    <SatelliteDish size={14} color={accuracy! > 30 ? colors.warningText : colors.textSecondary} strokeWidth={2.3} />
+                    <AppText variant="caption" color={accuracy! > 30 ? 'warningText' : 'textSecondary'} numeric>
+                      {t('nav.accuracy', { meters: Math.round(accuracy!) })}
+                    </AppText>
+                  </View>
+                ) : null}
+              </View>
               <View
                 accessible
                 accessibilityLabel={t('nav.tripSummary', { eta, minutes: remainingTime, distance: remainingDistance })}
@@ -411,6 +465,7 @@ export function NavigationOverlay({
                   tone="danger"
                 />
                 <ControlButton
+                  testID="navigation-pause"
                   icon={state.paused ? <Play size={21} color={colors.text} strokeWidth={2.4} /> : <Pause size={21} color={colors.text} strokeWidth={2.4} />}
                   label={state.paused ? t('nav.resume') : t('nav.pause')}
                   accessibilityLabel={state.paused ? t('nav.resumeNavigation') : t('nav.pauseNavigation')}
@@ -433,6 +488,7 @@ export function NavigationOverlay({
                   selected={!nav.muted}
                 />
                 <ControlButton
+                  testID="navigation-steps"
                   icon={<ListOrdered size={21} color={colors.text} strokeWidth={2.4} />}
                   label={t('nav.steps')}
                   accessibilityLabel={t('nav.showSteps')}
@@ -462,5 +518,6 @@ const styles = StyleSheet.create({
   arrivalIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
   stepIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   divider: { width: StyleSheet.hairlineWidth * 2, height: 34 },
+  chip: { alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill },
   visuallyHidden: { position: 'absolute', width: 1, height: 1, overflow: 'hidden', opacity: 0.01, left: -10000 },
 });

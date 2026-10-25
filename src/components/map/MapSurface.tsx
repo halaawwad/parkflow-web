@@ -142,8 +142,11 @@ function fitMapToCoordinates(map: L.Map, request: PendingFit): 'applied' | 'defe
   return 'applied';
 }
 
-/** Zoom used while following the car. */
+/** Zoom used while following the car; a walker is followed one level closer. */
 const FOLLOW_ZOOM = 17;
+const WALK_FOLLOW_ZOOM = 18;
+/** Round dots: the usual way a footpath route is drawn. */
+const WALK_DASH = '1 11';
 
 const latLngsOf = (line: GeoPoint[]) =>
   line.filter(isValidGeoPoint).map((point) => [point.latitude, point.longitude] as L.LatLngTuple);
@@ -348,7 +351,8 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
             withTrafficTooltip(
               L.polyline(toLatLngs(mainLine), {
                 color: route.trafficState ? TRAFFIC_COLORS[route.trafficState] : colors.brand,
-                weight: 5,
+                weight: route.walking ? 7 : 5,
+                ...(route.walking ? { dashArray: WALK_DASH, lineCap: 'round' as const } : null),
               }),
               route.trafficState,
             ),
@@ -380,6 +384,7 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
   // so the line never flickers as progress advances.
   const navLayers = useRef<{ traveled: L.Polyline; casing: L.Polyline; remaining: L.Polyline; accuracy: L.Circle } | undefined>(undefined);
   const navigating = Boolean(navigation);
+  const navWalking = Boolean(navigation?.walking);
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !navigating) return;
@@ -387,7 +392,7 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
       // Driven part: a light, desaturated line that still reads on satellite imagery.
       traveled: L.polyline([], { color: colors.borderStrong, weight: 7, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }),
       casing: L.polyline([], { color: colors.surface, weight: 13, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }),
-      remaining: L.polyline([], { color: colors.brand, weight: 8, opacity: 1, lineCap: 'round', lineJoin: 'round' }),
+      remaining: L.polyline([], { color: colors.brand, weight: navWalking ? 9 : 8, opacity: 1, lineCap: 'round', lineJoin: 'round', dashArray: navWalking ? WALK_DASH : undefined }),
       accuracy: L.circle([0, 0], { radius: 0, color: colors.info, weight: 1, opacity: 0.35, fillColor: colors.info, fillOpacity: 0.1, interactive: false }),
     };
     Object.values(layers).forEach((layer) => layer.addTo(map));
@@ -396,7 +401,7 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
       Object.values(layers).forEach((layer) => layer.remove());
       navLayers.current = undefined;
     };
-  }, [navigating, colors]);
+  }, [navigating, navWalking, colors]);
 
   const traveled = navigation?.traveled;
   const remaining = navigation?.remaining;
@@ -428,13 +433,29 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
       followStarted.current = false;
       return;
     }
-    if (!followStarted.current || map.getZoom() < FOLLOW_ZOOM - 1.5) {
+    const zoom = current.walking ? WALK_FOLLOW_ZOOM : FOLLOW_ZOOM;
+    if (!followStarted.current || map.getZoom() < zoom - 1.5) {
       followStarted.current = true;
-      map.setView(followCenter(map, current, FOLLOW_ZOOM), FOLLOW_ZOOM, { animate: true, duration: 0.8 } as L.ZoomPanOptions);
+      map.setView(followCenter(map, current, zoom), zoom, { animate: true, duration: 0.8 } as L.ZoomPanOptions);
       return;
     }
     map.panTo(followCenter(map, current, map.getZoom()), { animate: true, duration: 0.9, easeLinearity: 0.6, noMoveStart: true });
   }, [follow, navPosition]);
+
+  // Full-route overview: frame where the user is and everything still ahead, once per request.
+  const overview = Boolean(navigation?.overview);
+  useEffect(() => {
+    const map = mapRef.current;
+    const current = navigationRef.current;
+    if (!map || !overview || !current) return;
+    const points = [current.position, ...current.remaining].filter(isValidGeoPoint);
+    if (points.length < 2) return;
+    map.flyToBounds(L.latLngBounds(latLngsOf(points)), {
+      paddingTopLeft: [40, current.padding.top + 16],
+      paddingBottomRight: [40, current.padding.bottom + 16],
+      duration: 0.8,
+    });
+  }, [overview]);
 
   useImperativeHandle(ref, () => ({
     animateToRegion: (next, durationMs = 600) => {

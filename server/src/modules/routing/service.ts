@@ -14,14 +14,24 @@ import { enrichTraffic } from './traffic';
  * live closure it passes. The rejected alternatives come back too, so the map
  * can show the road the driver did NOT take and name the closure that ruled it
  * out. Offline, it degrades to a straight line rather than failing.
+ *
+ * Walking uses a separate OSRM server running the foot profile, so routes follow
+ * footpaths and ignore one-way streets. The response format is identical, which
+ * lets the same maneuver engine guide both modes.
  */
 
-const OSRM = env.OSRM_BASE_URL;
+export type TravelProfile = 'driving' | 'walking';
+
+const PROVIDERS: Record<TravelProfile, { base: string; profile: string }> = {
+  driving: { base: env.OSRM_BASE_URL, profile: 'driving' },
+  walking: { base: env.OSRM_FOOT_BASE_URL, profile: env.OSRM_FOOT_PROFILE },
+};
+const HEADERS = { 'User-Agent': env.ROUTING_USER_AGENT, Accept: 'application/json' };
 const NEAR_METERS = 250;
 const PENALTY_SECONDS = { closed: 3600, congested: 900 } as const;
 const TIMEOUT_MS = 6000;
-/** Rough urban driving speed for the offline estimate, m/s (~30 km/h). */
-const FALLBACK_SPEED = 8.3;
+/** Rough speeds for the offline estimate, m/s: urban driving (~30 km/h) and walking (~4.8 km/h). */
+const FALLBACK_SPEED: Record<TravelProfile, number> = { driving: 8.3, walking: 1.35 };
 
 /** One OSRM maneuver, kept as the router produced it so the client can build real turn guidance. */
 export interface RouteStep {
@@ -74,6 +84,8 @@ interface OsrmNearestResponse {
 }
 
 interface RouteOptions {
+  /** Driving (default) or walking. */
+  profile?: TravelProfile;
   mode?: 'checkpoint-aware' | 'fastest';
   snapDestination?: boolean;
   maxAlternatives?: number;
@@ -90,8 +102,8 @@ const cache = new Map<string, {routes:OsrmRoute[];expires:number}>();
 
 const toPoint = ([longitude, latitude]: LngLat): GeoPoint => ({ latitude, longitude });
 
-const keyOf = (points: GeoPoint[], bearing?: number) =>
-  points.flatMap((p) => [p.latitude, p.longitude]).map((n) => n.toFixed(5)).join(',') +
+const keyOf = (profile: TravelProfile, points: GeoPoint[], bearing?: number) =>
+  profile + ':' + points.flatMap((p) => [p.latitude, p.longitude]).map((n) => n.toFixed(5)).join(',') +
   (bearing === undefined ? '' : `@${Math.round(bearing)}`);
 
 /** Bearing tolerance OSRM may deviate from the requested heading at the origin. */
@@ -116,8 +128,8 @@ function stepsOf(legs: NonNullable<OsrmResponse['routes']>[number]['legs']): Rou
   );
 }
 
-async function fetchRoutes(points: GeoPoint[], bearing?: number): Promise<OsrmRoute[]> {
-  const key = keyOf(points, bearing);
+async function fetchRoutes(profile: TravelProfile, points: GeoPoint[], bearing?: number): Promise<OsrmRoute[]> {
+  const key = keyOf(profile, points, bearing);
   const hit = cache.get(key);
   if (hit && hit.expires>Date.now()) return hit.routes;
 
@@ -129,10 +141,11 @@ async function fetchRoutes(points: GeoPoint[], bearing?: number): Promise<OsrmRo
     const bearings = bearing === undefined
       ? ''
       : `&bearings=${Math.round(((bearing % 360) + 360) % 360)},${BEARING_RANGE}${';'.repeat(points.length - 1)}`;
+    const provider = PROVIDERS[profile];
     const url =
-      `${OSRM}/route/v1/driving/${coordinates}` +
+      `${provider.base}/route/v1/${provider.profile}/${coordinates}` +
       `?alternatives=${points.length === 2}&overview=full&geometries=geojson&steps=true${bearings}`;
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await fetch(url, { signal: controller.signal, headers: HEADERS });
     const json = (await response.json()) as OsrmResponse;
     if (json.code !== 'Ok' || !json.routes?.length) return [];
 
@@ -159,8 +172,8 @@ async function snapToDrivableRoad(point: GeoPoint): Promise<GeoPoint> {
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     const response = await fetch(
-      `${OSRM}/nearest/v1/driving/${point.longitude},${point.latitude}?number=1`,
-      { signal: controller.signal },
+      `${PROVIDERS.driving.base}/nearest/v1/driving/${point.longitude},${point.latitude}?number=1`,
+      { signal: controller.signal, headers: HEADERS },
     );
     const json = (await response.json()) as OsrmNearestResponse;
     const snapped = json.code === 'Ok' ? json.waypoints?.[0]?.location : undefined;
@@ -191,13 +204,17 @@ const worstOf = (closures: RouteClosure[]) =>
 
 export const routingService = {
   async getRoute(from: GeoPoint, to: GeoPoint, options: RouteOptions = {}) {
-    const destination = options.snapDestination ? await snapToDrivableRoad(to) : to;
+    const profile = options.profile ?? 'driving';
+    // A pedestrian walks to the place itself; only a car needs the nearest drivable road.
+    const destination = options.snapDestination && profile === 'driving' ? await snapToDrivableRoad(to) : to;
     const via = options.via ?? [];
-    const fetched = await fetchRoutes([from, ...via, destination], options.originBearing);
+    // A walker can turn on the spot, so a heading hint only matters when driving.
+    const bearing = profile === 'driving' ? options.originBearing : undefined;
+    const fetched = await fetchRoutes(profile, [from, ...via, destination], bearing);
     // A heading hint can make OSRM fail when the car sits on an unmapped lot; retry without it.
-    const routesPromise = fetched.length || options.originBearing === undefined
+    const routesPromise = fetched.length || bearing === undefined
       ? Promise.resolve(fetched)
-      : fetchRoutes([from, ...via, destination]);
+      : fetchRoutes(profile, [from, ...via, destination]);
     const [routes, states] = await Promise.all([
       routesPromise,
       options.mode === 'fastest' ? Promise.resolve([] as CheckpointState[]) : checkpoints(),
@@ -210,12 +227,13 @@ export const routingService = {
       return {
         coordinates: line,
         distanceMeters: Math.round(distance),
-        durationSeconds: Math.round(distance / FALLBACK_SPEED),
+        durationSeconds: Math.round(distance / FALLBACK_SPEED[profile]),
         penaltySeconds: penaltyOf(closures),
         closuresOnRoute: closures,
         rejected: [],
         alternatives: [],
         source: 'straight-line',
+        profile,
         snappedDestination: destination,
       };
     }
@@ -233,7 +251,8 @@ export const routingService = {
 
     const best = scored[0]!;
     const alternatives = scored.slice(1, 1 + (options.maxAlternatives ?? scored.length));
-    const traffic = via.length ? undefined : await enrichTraffic(from, destination);
+    // Road traffic says nothing about a footpath.
+    const traffic = via.length || profile === 'walking' ? undefined : await enrichTraffic(from, destination);
     return {
       coordinates: best.coordinates,
       distanceMeters: Math.round(best.distance),
@@ -254,6 +273,7 @@ export const routingService = {
         ...(options.steps ? { steps: route.steps } : {}),
       })),
       source: 'osrm',
+      profile,
       snappedDestination: destination,
     };
   },

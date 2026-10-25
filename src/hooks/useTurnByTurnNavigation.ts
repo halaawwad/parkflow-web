@@ -3,7 +3,7 @@ import { AccessibilityInfo, AppState, Platform } from 'react-native';
 import * as Location from 'expo-location';
 import type { Locale } from '@/i18n';
 import { services } from '@/services';
-import type { GeoPoint, RouteRequestOptions, RouteResult } from '@/types';
+import type { GeoPoint, RouteRequestOptions, RouteResult, TravelMode } from '@/types';
 import { AppError } from '@/utils/errors';
 import { distanceMeters } from '@/utils/geo';
 import { buildNavigationRoute } from '@/utils/navigation/maneuvers';
@@ -13,6 +13,7 @@ import {
   initialNavigationState,
   navigationReducer,
   remainingVia,
+  resumeOnReturn,
   routeRequestDue,
   type LocationFix,
   type NavigationState,
@@ -34,7 +35,7 @@ export interface NavigationTarget {
   via?: GeoPoint[];
   /** A route already on screen. Used when it starts where the driver is, so guidance begins instantly. */
   initialRoute?: RouteResult;
-  routeOptions?: Pick<RouteRequestOptions, 'mode' | 'snapDestination'>;
+  routeOptions?: Pick<RouteRequestOptions, 'mode' | 'snapDestination' | 'profile'>;
 }
 
 const TICK_MS = 2_000;
@@ -67,7 +68,9 @@ export function useTurnByTurnNavigation(locale: Locale) {
   const spokenRef = useRef(new Set<string>());
   const [muted, setMutedState] = useState(false);
   const [vibration, setVibration] = useState(true);
-  const [following, setFollowing] = useState(true);
+  const [following, setFollowingState] = useState(true);
+  /** Map shows the whole remaining route instead of following the user. */
+  const [overview, setOverview] = useState(false);
   const [liveMessage, setLiveMessage] = useState('');
   const [voiceStatus, setVoiceStatus] = useState<SpeechQueueStatus>({ speaking: false, blocked: false, errors: 0 });
   const [voice, setVoice] = useState<VoiceChoice>({ language: locale === 'ar' ? 'ar-SA' : 'en-US', available: true });
@@ -177,13 +180,18 @@ export function useTurnByTurnNavigation(locale: Locale) {
   useEffect(() => (navigating && state.status !== 'error' ? keepScreenAwake() : undefined), [navigating, state.status]);
 
   // Background: stay quiet (the OS stops foreground location anyway); resume cleanly.
+  // Only a real absence re-announces where the user is: a blip (a call banner, a
+  // quick app switch) must not replay the instruction they just heard.
   useEffect(() => {
+    let backgroundSince = 0;
     const subscription = AppState.addEventListener('change', (next) => {
       const background = next !== 'active';
       if (background === backgroundRef.current) return;
       backgroundRef.current = background;
-      if (background) queue.clear();
-      else if (stateRef.current.status === 'active') {
+      if (background) {
+        backgroundSince = Date.now();
+        queue.clear();
+      } else if (resumeOnReturn(stateRef.current, Date.now() - backgroundSince)) {
         spokenRef.current.clear();
         dispatch({ type: 'resume', now: Date.now() });
       }
@@ -215,14 +223,14 @@ export function useTurnByTurnNavigation(locale: Locale) {
     inFlightRef.current = true;
     dispatch({ type: 'route-requested', now });
     const reroute = Boolean(current.route);
-    if (reroute) say(systemPhrases.rerouting(localeRef.current));
+    if (reroute) say(systemPhrases.rerouting(localeRef.current, current.profile));
     try {
       const result = await services.routing.getRoute(fix.point, target.destination, {
         ...target.routeOptions,
         steps: true,
         via: via.length ? via : undefined,
-        // Start the new route in the direction the car is already moving.
-        originBearing: current.speed >= 2 && current.heading !== undefined ? Math.round(current.heading) % 360 : undefined,
+        // Start the new route in the direction the car is already moving (walkers can turn on the spot).
+        originBearing: current.profile === 'driving' && current.speed >= 2 && current.heading !== undefined ? Math.round(current.heading) % 360 : undefined,
       });
       if (request !== requestRef.current) return;
       const route = buildNavigationRoute(result, via);
@@ -289,11 +297,11 @@ export function useTurnByTurnNavigation(locale: Locale) {
       if (vibrationRef.current) vibrateFor('arrived');
       return;
     }
-    if (state.status === 'active' && state.epoch === 1 && prev.epoch === 0) say(systemPhrases.start(lang));
+    if (state.status === 'active' && state.epoch === 1 && prev.epoch === 0) say(systemPhrases.start(lang, state.profile));
     else if (state.epoch > prev.epoch && prev.epoch > 0) say(systemPhrases.rerouted(lang));
 
     if (state.wrongWay && !prev.wrongWay) {
-      say(systemPhrases.wrongWay(lang), { priority: 'high' });
+      say(systemPhrases.wrongWay(lang, state.profile), { priority: 'high' });
       if (vibrationRef.current) vibrateFor('alert');
     }
     if (state.route && state.signal !== 'good' && prev.signal === 'good') {
@@ -334,10 +342,12 @@ export function useTurnByTurnNavigation(locale: Locale) {
       spokenRef.current.clear();
       queue.reset();
       targetRef.current = { ...target };
-      voiceEngineRef.current?.prefetch([systemPhrases.start(localeRef.current), systemPhrases.rerouting(localeRef.current)]);
-      setFollowing(true);
+      const profile = target.routeOptions?.profile ?? 'driving';
+      voiceEngineRef.current?.prefetch([systemPhrases.start(localeRef.current, profile), systemPhrases.rerouting(localeRef.current, profile)]);
+      setFollowingState(true);
+      setOverview(false);
       setLiveMessage('');
-      dispatch({ type: 'start', now: Date.now() });
+      dispatch({ type: 'start', now: Date.now(), profile });
     },
     [queue],
   );
@@ -393,6 +403,36 @@ export function useTurnByTurnNavigation(locale: Locale) {
     if (target) start(target);
   }, [start]);
 
+  /**
+   * Switches between driving and walking mid-trip: same destination, a fresh
+   * route from the new profile. The route already on screen is not reused —
+   * it was planned for the other mode.
+   */
+  const switchProfile = useCallback(
+    (profile: TravelMode) => {
+      const target = targetRef.current;
+      if (!target || stateRef.current.profile === profile) return;
+      start({
+        destination: target.destination,
+        name: target.name,
+        // Trip-need stops are planned for a car; a walk goes straight to the destination.
+        via: profile === 'walking' ? undefined : target.via,
+        routeOptions: { ...target.routeOptions, profile },
+      });
+    },
+    [start],
+  );
+
+  /** Following and the full-route overview are exclusive camera modes. */
+  const setFollowing = useCallback((next: boolean) => {
+    setFollowingState(next);
+    if (next) setOverview(false);
+  }, []);
+  const showOverview = useCallback(() => {
+    setFollowingState(false);
+    setOverview(true);
+  }, []);
+
   return {
     state,
     target: targetRef.current,
@@ -401,6 +441,10 @@ export function useTurnByTurnNavigation(locale: Locale) {
     pause,
     resume,
     retry,
+    switchProfile,
+    profile: state.profile,
+    overview,
+    showOverview,
     muted,
     setMuted,
     repeat,

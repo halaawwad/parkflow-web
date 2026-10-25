@@ -83,6 +83,10 @@ const worstOf = (closures: RouteClosure[]) =>
   closures.find((c) => c.status === 'closed') ?? closures[0];
 
 export const osrmRoutingService: RoutingService = {
+  // The offline client has no AI; the route overview is simply not shown.
+  async summarize() {
+    return null;
+  },
   async getRoute(from, to) {
     const [routes, states] = await Promise.all([fetchRoutes(from, to), loadCheckpointStates()]);
 

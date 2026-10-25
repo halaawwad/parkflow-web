@@ -13,6 +13,10 @@ export const env = z.object({
  JWT_ACCESS_SECRET:z.string().min(32), JWT_REFRESH_SECRET:z.string().min(32),
  ACCESS_TOKEN_TTL:z.coerce.number().int().positive().default(900), REFRESH_TOKEN_TTL:z.coerce.number().int().positive().default(2592000),
  CORS_ORIGINS:z.string().default('http://localhost:8081'), OSRM_BASE_URL:z.string().url().default('https://router.project-osrm.org'), GOOGLE_ROUTES_API_KEY:optional,
+ // Walking routes: an OSRM server running the foot profile. The FOSSGIS instance is free for fair use; self-host for production volume.
+ OSRM_FOOT_BASE_URL:z.string().url().default('https://routing.openstreetmap.de/routed-foot'), OSRM_FOOT_PROFILE:z.string().regex(/^[a-z]+$/).default('foot'),
+ // Public OSRM servers ask callers to identify themselves.
+ ROUTING_USER_AGENT:z.string().min(3).max(200).default('ParkFlow/1.0 (+https://github.com/yazeedbesher12/ParkFlow)'),
  EMAIL_PROVIDER:z.enum(['smtp']).default('smtp'), EMAIL_FROM:z.email(),
  SMTP_HOST:z.string().min(1), SMTP_PORT:z.coerce.number().int().positive().default(465),
  SMTP_SECURE:z.enum(['true','false']).default('true').transform(v=>v==='true'), SMTP_USER:z.string().min(1), SMTP_PASSWORD:optional,

@@ -24,6 +24,9 @@ export function createApp(){const app=express();app.disable('x-powered-by');if(e
  app.use('/api/v1/vehicle-warnings/check',limiter('rate:vehicle-warnings:',6,60000));
 // Route start prefetches one prompt per maneuver; a minute's budget covers long routes.
 app.use('/api/v1/voice/speak',limiter('rate:voice:',90,60000));
+ // Navigation reroutes are debounced client-side; this caps a misbehaving client before it hits the routing providers.
+ app.use('/api/v1/routes/plan',limiter('rate:routes:',60,60000));
+ app.use('/api/v1/routes/summary',limiter('rate:route-summary:',20,60000));
  if(!(env.NODE_ENV==='development'&&env.DEV_SKIP_EMAIL_OTP)) app.use('/api/v1/auth/request-otp',limiter('rate:otp:',10,600000));
  app.use('/api/v1/auth/verify-otp',limiter('rate:verify:',30,600000));
  app.use('/api/v1/auth/dev-login',limiter('rate:dev-login:',30,600000));

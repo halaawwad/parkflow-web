@@ -1,4 +1,5 @@
-import { ChevronDown, ChevronUp, Navigation, Navigation2, ShieldCheck, TriangleAlert, X } from 'lucide-react-native';
+import { useMemo } from 'react';
+import { ChevronDown, ChevronUp, Footprints, Navigation, Navigation2, ShieldCheck, Sparkles, TriangleAlert, X } from 'lucide-react-native';
 import { ScrollView, View } from 'react-native';
 
 import { AppButton, AppText, IconButton, PressableScale } from '@/components/ui';
@@ -7,9 +8,46 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radius } from '@/theme/radius';
 import { shadow } from '@/theme/shadows';
 import { spacing } from '@/theme/spacing';
-import type { RouteDestination, RouteClosure, RouteResult } from '@/types';
+import type { RouteDestination, RouteClosure, RouteResult, TravelMode } from '@/types';
 import { formatDistance } from '@/utils/geo';
 import type { RouteImpact, ScoredRouteCandidate } from '@/utils/routeImpact';
+import { useRouteSummary } from '@/hooks/useCommunity';
+import { buildNavigationRoute } from '@/utils/navigation/maneuvers';
+import { localizedStreet, maneuverInstruction } from '@/utils/navigation/instructions';
+import { TravelModeToggle } from './TravelModeToggle';
+
+/**
+ * Optional AI overview, shown inside route details. It is built from the
+ * router's own maneuvers, and only fetched once the details are opened.
+ */
+function RouteSummary({ route, destinationName, profile }: { route: RouteResult; destinationName: string; profile: TravelMode }) {
+  const { colors } = useTheme();
+  const { t, locale, row } = useLocale();
+  const input = useMemo(() => {
+    const guided = buildNavigationRoute(route);
+    if (!guided) return undefined;
+    const steps = guided.maneuvers.filter((m) => m.announce || m.kind === 'depart');
+    return {
+      profile,
+      locale,
+      destinationName: destinationName.slice(0, 120),
+      distanceMeters: Math.round(route.distanceMeters),
+      durationSeconds: Math.round(route.durationSeconds),
+      steps: steps.slice(0, 60).map((m, i) => ({
+        instruction: maneuverInstruction(m, locale, localizedStreet(m.street, locale)).slice(0, 160),
+        distanceMeters: Math.round(Math.max(0, (steps[i + 1]?.along ?? guided.distance) - m.along)),
+      })),
+    };
+  }, [route, destinationName, profile, locale]);
+  const { data: summary } = useRouteSummary(input);
+  if (!summary) return null;
+  return (
+    <View style={{ flexDirection: row, alignItems: 'flex-start', gap: spacing.sm }} accessible accessibilityLabel={`${t('route.aiSummary')}: ${summary}`}>
+      <Sparkles size={15} color={colors.brand} strokeWidth={2.2} />
+      <AppText variant="caption" color="textSecondary" style={{ flex: 1 }}>{summary}</AppText>
+    </View>
+  );
+}
 
 function RouteDetails({ route }: { route: RouteResult }) {
   const { colors } = useTheme();
@@ -99,6 +137,9 @@ interface CompactRoutePanelProps {
   detailsExpanded: boolean;
   onDetailsExpandedChange: (expanded: boolean) => void;
   onClose: () => void;
+  /** Driving or walking; changing it re-plans the route with that profile. */
+  travelMode?: TravelMode;
+  onTravelModeChange?: (mode: TravelMode) => void;
   /** Starts in-app turn-by-turn navigation. */
   onStartNavigation?: () => void;
   onOpenMaps: () => void;
@@ -128,6 +169,8 @@ export function CompactRoutePanel({
   detailsExpanded,
   onDetailsExpandedChange,
   onClose,
+  travelMode = 'driving',
+  onTravelModeChange,
   onStartNavigation,
   onOpenMaps,
   onStartParking,
@@ -180,6 +223,9 @@ export function CompactRoutePanel({
         distance: formatDistance(routeNeedsComparison.shortest.distanceMeters),
       })
     : '';
+  const walking = travelMode === 'walking';
+  // A straight line is not a walking route: say so instead of offering to navigate along it.
+  const noWalkingRoute = walking && route?.source === 'straight-line';
   const differenceSummary = routeNeedsComparison
     ? `${extraDurationLabel(routeNeedsComparison.extraDurationSeconds, locale)} · +${formatDistance(routeNeedsComparison.extraDistanceMeters)} · +${routeNeedsComparison.extraPercent}%`
     : '';
@@ -197,10 +243,13 @@ export function CompactRoutePanel({
           <AppText variant="caption" color="textTertiary">{t('route.destination')}</AppText>
           <AppText variant="title" numberOfLines={1}>{name}</AppText>
         </View>
-        {route ? (
-          <AppText variant="title" color="brand" numeric>
-            {t('route.summary', { minutes: Math.max(1, Math.round(route.durationSeconds / 60)), distance: formatDistance(route.distanceMeters) })}
-          </AppText>
+        {route && !noWalkingRoute ? (
+          <View style={{ flexDirection: row, alignItems: 'center', gap: 4 }}>
+            {walking ? <Footprints size={15} color={colors.brand} strokeWidth={2.4} /> : null}
+            <AppText variant="title" color="brand" numeric>
+              {t(walking ? 'route.walkSummary' : 'route.summary', { minutes: Math.max(1, Math.round(route.durationSeconds / 60)), distance: formatDistance(route.distanceMeters) })}
+            </AppText>
+          </View>
         ) : loading ? (
           <AppText variant="caption" color="textSecondary">{t('route.loading')}</AppText>
         ) : null}
@@ -212,6 +261,15 @@ export function CompactRoutePanel({
           size={32}
         />
       </View>
+
+      {onTravelModeChange ? <TravelModeToggle value={travelMode} onChange={onTravelModeChange} /> : null}
+
+      {noWalkingRoute ? (
+        <View accessible accessibilityRole="alert" style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.warningSoft }}>
+          <TriangleAlert size={17} color={colors.warningText} strokeWidth={2.3} />
+          <AppText variant="caption" color="warningText" style={{ flex: 1 }}>{t('route.noWalkingRoute')}</AppText>
+        </View>
+      ) : null}
 
       {primaryImpact ? (
         <PressableScale
@@ -315,7 +373,7 @@ export function CompactRoutePanel({
         <AppText variant="caption" color="textSecondary">{t('route.noSaferAlternative')}</AppText>
       ) : null}
 
-      {route ? (
+      {route && !noWalkingRoute ? (
         <>
           <PressableScale
             onPress={() => onDetailsExpandedChange(!detailsExpanded)}
@@ -330,21 +388,24 @@ export function CompactRoutePanel({
             <Chevron size={14} color={colors.textSecondary} strokeWidth={2.3} />
           </PressableScale>
           {detailsExpanded ? (
-            <ScrollView style={{ maxHeight: 108 }} showsVerticalScrollIndicator={false} nestedScrollEnabled>
-              <RouteDetails route={route} />
+            <ScrollView style={{ maxHeight: 140 }} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+              <View style={{ gap: spacing.sm }}>
+                <RouteSummary route={route} destinationName={name} profile={travelMode} />
+                <RouteDetails route={route} />
+              </View>
             </ScrollView>
           ) : null}
         </>
       ) : null}
 
-      {onStartNavigation ? (
+      {onStartNavigation && !noWalkingRoute ? (
         <AppButton
           testID="start-navigation"
-          label={t('nav.start')}
+          label={t(walking ? 'nav.startWalking' : 'nav.start')}
           accessibilityHint={t('nav.startHint')}
           size="md"
           onPress={onStartNavigation}
-          icon={<Navigation2 size={18} color={colors.onBrand} strokeWidth={2.4} fill={colors.onBrand} />}
+          icon={walking ? <Footprints size={18} color={colors.onBrand} strokeWidth={2.4} /> : <Navigation2 size={18} color={colors.onBrand} strokeWidth={2.4} fill={colors.onBrand} />}
         />
       ) : null}
 

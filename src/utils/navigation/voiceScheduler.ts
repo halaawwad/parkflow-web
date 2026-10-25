@@ -1,5 +1,6 @@
+import type { TravelMode } from '@/types';
 import { actionPhrase, approachPhrase, continuePhrase, type GuidanceLocale } from './instructions';
-import type { Maneuver, NavigationRoute } from './maneuvers';
+import { PASSED_TOLERANCE, type Maneuver, type NavigationRoute } from './maneuvers';
 import type { RouteProgress } from './progress';
 
 /**
@@ -27,8 +28,21 @@ export interface Announcement {
 const TIERS: AnnouncementTier[] = ['continue', 'far', 'prepare', 'now'];
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-/** Distance windows in metres for the current speed (m/s). Assumes at least ~18 km/h. */
-export function announcementDistances(speed: number) {
+/**
+ * Distance windows in metres for the current speed (m/s). Driving assumes at
+ * least ~18 km/h. Walking assumes ~4.3 km/h and uses short windows: about
+ * 120 m ahead, 40 m to prepare and ~10 m at the turn, because a pedestrian
+ * told about a corner 500 m away has forgotten it by the time they reach it.
+ */
+export function announcementDistances(speed: number, profile: TravelMode = 'driving') {
+  if (profile === 'walking') {
+    const v = Math.max(speed, 1.2);
+    return {
+      far: clamp(v * 90, 100, 200),
+      prepare: clamp(v * 28, 30, 60),
+      now: clamp(v * 7, 8, 15),
+    };
+  }
   const v = Math.max(speed, 5);
   return {
     far: clamp(v * 45, 500, 1600),
@@ -36,6 +50,9 @@ export function announcementDistances(speed: number) {
     now: clamp(v * 4, 25, 70),
   };
 }
+
+/** Distance one GPS fix covers, for predicting where a prompt will fire. */
+const fixStep = (speed: number, profile: TravelMode) => Math.max(speed, profile === 'walking' ? 1.2 : 5);
 
 export const tierKey = (maneuverId: string, tier: AnnouncementTier) => `${maneuverId}:${tier}`;
 
@@ -59,7 +76,11 @@ export function followingManeuver(route: NavigationRoute, index: number, speed: 
   if (!current || current.kind === 'arrive') return undefined;
   const next = route.maneuvers.slice(index + 1).find((maneuver) => maneuver.announce);
   if (!next) return undefined;
-  return next.along - current.along <= Math.max(60, speed * 6) ? next : undefined;
+  // A walker hears both turns in one breath only when they are a few steps apart.
+  // Fixed rather than speed-scaled: walking pace varies too little to matter, and a
+  // fixed reach keeps the sentences prefetched for the route identical to those spoken.
+  const reach = route.profile === 'walking' ? 25 : Math.max(60, speed * 6);
+  return next.along - current.along <= reach ? next : undefined;
 }
 
 export function planAnnouncement(input: {
@@ -73,7 +94,7 @@ export function planAnnouncement(input: {
   const maneuver = route.maneuvers[progress.nextIndex];
   if (!maneuver || !maneuver.announce) return undefined;
   const distance = progress.distanceToNext;
-  const windows = announcementDistances(speed);
+  const windows = announcementDistances(speed, route.profile);
   const has = (tier: AnnouncementTier) => spoken.has(tierKey(maneuver.id, tier));
   const make = (tier: AnnouncementTier, text: string, priority: Announcement['priority'] = 'normal', chained?: Maneuver): Announcement => ({
     key: tierKey(maneuver.id, tier),
@@ -94,14 +115,14 @@ export function planAnnouncement(input: {
   }
   if (distance <= windows.prepare) {
     if (has('prepare') || distance - windows.now < 15) return undefined;
-    return make('prepare', approachPhrase(maneuver, distance, locale));
+    return make('prepare', approachPhrase(maneuver, distance, locale, route.profile));
   }
   if (distance <= windows.far) {
     if (has('far') || terminal || distance < windows.prepare * 1.6) return undefined;
-    return make('far', approachPhrase(maneuver, distance, locale));
+    return make('far', approachPhrase(maneuver, distance, locale, route.profile));
   }
   // A long stretch with nothing to do: say so once, then stay quiet.
-  if (!has('continue') && !has('far')) return make('continue', continuePhrase(distance, locale));
+  if (!has('continue') && !has('far')) return make('continue', continuePhrase(distance, locale, route.profile));
   return undefined;
 }
 
@@ -122,8 +143,8 @@ export function upcomingSentences(input: {
   const { route, progress, speed, locale } = input;
   const maneuver = route.maneuvers[progress.nextIndex];
   if (!maneuver || !maneuver.announce) return [];
-  const windows = announcementDistances(speed);
-  const step = Math.max(speed, 5);
+  const windows = announcementDistances(speed, route.profile);
+  const step = fixStep(speed, route.profile);
   const distance = progress.distanceToNext;
   const terminal = maneuver.kind === 'arrive' || maneuver.kind === 'waypoint';
   const out: string[] = [];
@@ -131,11 +152,11 @@ export function upcomingSentences(input: {
 
   if (!terminal) out.push(actionPhrase(maneuver, locale, followingManeuver(route, progress.nextIndex, speed)));
   // The prompt that would fire at the current distance (fetched just before it is planned).
-  if (distance <= windows.prepare && distance - windows.now >= 15) out.push(approachPhrase(maneuver, distance, locale));
-  if (!terminal && distance <= windows.far && distance >= windows.prepare * 1.6) out.push(approachPhrase(maneuver, distance, locale));
-  if (distance <= windows.prepare + 300) near(windows.prepare).forEach((d) => out.push(approachPhrase(maneuver, d, locale)));
+  if (distance <= windows.prepare && distance - windows.now >= 15) out.push(approachPhrase(maneuver, distance, locale, route.profile));
+  if (!terminal && distance <= windows.far && distance >= windows.prepare * 1.6) out.push(approachPhrase(maneuver, distance, locale, route.profile));
+  if (distance <= windows.prepare + 300) near(windows.prepare).forEach((d) => out.push(approachPhrase(maneuver, d, locale, route.profile)));
   if (!terminal && distance <= windows.far + 400 && distance > windows.prepare * 1.6) {
-    near(windows.far).forEach((d) => out.push(approachPhrase(maneuver, d, locale)));
+    near(windows.far).forEach((d) => out.push(approachPhrase(maneuver, d, locale, route.profile)));
   }
 
   // Right after this maneuver the next one becomes current. Whatever is said
@@ -146,11 +167,15 @@ export function upcomingSentences(input: {
   if (after && distance <= windows.prepare + 300) {
     const gap = after.along - maneuver.along;
     const afterTerminal = after.kind === 'arrive' || after.kind === 'waypoint';
-    for (const d of [gap, gap - step, gap - 2 * step]) {
+    // The next maneuver only becomes current once this one is passed by the
+    // tolerance, so its first prompt can come up to that much (plus a fix) later.
+    // At driving speed two fixes cover it; at walking pace they do not.
+    const late = 2 * step < PASSED_TOLERANCE + step ? [gap - PASSED_TOLERANCE, gap - PASSED_TOLERANCE - step] : [];
+    for (const d of [gap, gap - step, gap - 2 * step, ...late]) {
       if (d <= windows.now + 15) continue;
-      if (d > windows.far) out.push(continuePhrase(d, locale));
-      else if (d <= windows.prepare) out.push(approachPhrase(after, d, locale));
-      else if (!afterTerminal && d >= windows.prepare * 1.6) out.push(approachPhrase(after, d, locale));
+      if (d > windows.far) out.push(continuePhrase(d, locale, route.profile));
+      else if (d <= windows.prepare) out.push(approachPhrase(after, d, locale, route.profile));
+      else if (!afterTerminal && d >= windows.prepare * 1.6) out.push(approachPhrase(after, d, locale, route.profile));
     }
   }
   return [...new Set(out)];
@@ -161,8 +186,8 @@ export function routeSentences(route: NavigationRoute, locale: GuidanceLocale): 
   const out: string[] = [];
   route.maneuvers.forEach((maneuver, index) => {
     if (!maneuver.announce || maneuver.kind === 'arrive' || maneuver.kind === 'waypoint') return;
-    // Typical city speed decides whether a close follow-up is chained.
-    out.push(actionPhrase(maneuver, locale, followingManeuver(route, index, 10)));
+    // Typical city (or walking) speed decides whether a close follow-up is chained.
+    out.push(actionPhrase(maneuver, locale, followingManeuver(route, index, route.profile === 'walking' ? 1.4 : 10)));
   });
   return out;
 }

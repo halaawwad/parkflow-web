@@ -239,12 +239,24 @@ export interface RoadReportService {
   reject(reportId: string): Promise<RoadReport>;
 }
 
+/** Input for the optional AI route overview: the provider's own instructions, reworded by Gemini. */
+export interface RouteSummaryRequest {
+  profile: 'driving' | 'walking';
+  locale: 'ar' | 'en';
+  destinationName: string;
+  distanceMeters: number;
+  durationSeconds: number;
+  steps: { instruction: string; distanceMeters: number }[];
+}
+
 export interface RoutingService {
   getRoute(
     from: GeoPoint,
     to: GeoPoint,
     options?: RouteRequestOptions,
   ): Promise<RouteResult>;
+  /** Null when the server has no AI configured or the reply was not grounded in the route. */
+  summarize(input: RouteSummaryRequest): Promise<string | null>;
 }
 
 /** Natural navigation voice synthesised on the server (Gemini text-to-speech). */

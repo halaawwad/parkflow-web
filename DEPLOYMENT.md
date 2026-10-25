@@ -174,7 +174,8 @@ and still runs the backend and worker as separate services.
    plus `/api/v1`.
 
 Optional variables (add in the dashboard only if you use them): `GEMINI_API_KEY` (dashboard warning
-check), `GOOGLE_ROUTES_API_KEY`, `FIREBASE_PROJECT_ID` / `FIREBASE_CLIENT_EMAIL` / `FIREBASE_PRIVATE_KEY`,
+check, natural navigation voice and the optional route overview; see docs/GEMINI_SETUP.md), `GOOGLE_ROUTES_API_KEY`,
+`OSRM_FOOT_BASE_URL` / `OSRM_FOOT_PROFILE` / `ROUTING_USER_AGENT` (walking routes; see docs/PEDESTRIAN_NAVIGATION.md), `FIREBASE_PROJECT_ID` / `FIREBASE_CLIENT_EMAIL` / `FIREBASE_PRIVATE_KEY`,
 `EXPO_PUSH_ACCESS_TOKEN`, `EMERGENCY_CALL_NUMBER`, and the `ROAD_REPORT_*` tuning values. All have safe defaults.
 
 **Without a Blueprint** (manual web service): Runtime **Docker**, Root Directory **`server`**, Branch **`main`**,

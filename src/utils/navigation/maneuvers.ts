@@ -1,4 +1,4 @@
-import type { GeoPoint, RouteResult, RouteStep } from '@/types';
+import type { GeoPoint, RouteResult, RouteStep, TravelMode } from '@/types';
 import { bearingDifference, cumulativeDistances } from './geometry';
 
 /**
@@ -45,6 +45,8 @@ export interface Maneuver {
 
 export interface NavigationRoute {
   id: string;
+  /** Driving or walking — selects thresholds, voice timing and wording. */
+  profile: TravelMode;
   line: GeoPoint[];
   cumulative: number[];
   distance: number;
@@ -140,7 +142,7 @@ let routeCounter = 0;
  * measured along.
  */
 export function buildNavigationRoute(
-  route: Pick<RouteResult, 'source' | 'steps' | 'distanceMeters' | 'durationSeconds'>,
+  route: Pick<RouteResult, 'source' | 'steps' | 'distanceMeters' | 'durationSeconds'> & { profile?: TravelMode },
   via: GeoPoint[] = [],
 ): NavigationRoute | undefined {
   const steps = route.steps;
@@ -189,6 +191,7 @@ export function buildNavigationRoute(
 
   return {
     id,
+    profile: route.profile ?? 'driving',
     line,
     cumulative,
     distance: cumulative[cumulative.length - 1]!,
@@ -201,8 +204,11 @@ export function buildNavigationRoute(
   };
 }
 
+/** How far past a maneuver guidance waits before moving on, so GPS jitter cannot skip a turn. */
+export const PASSED_TOLERANCE = 8;
+
 /** The next maneuver the driver must act on, at or after `along`. */
-export function nextManeuverIndex(route: NavigationRoute, along: number, passedTolerance = 8): number {
+export function nextManeuverIndex(route: NavigationRoute, along: number, passedTolerance = PASSED_TOLERANCE): number {
   const index = route.maneuvers.findIndex(
     (maneuver) => maneuver.kind !== 'depart' && maneuver.announce && maneuver.along > along - passedTolerance,
   );

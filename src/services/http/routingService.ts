@@ -32,6 +32,15 @@ const normalizeRoute = (route: RouteResult): RouteResult => ({
 });
 
 export const httpRoutingService: RoutingService = {
+  async summarize(input) {
+    try {
+      const result = await api<{ summary: string | null }>('/routes/summary', { method: 'POST', body: input });
+      return result.summary;
+    } catch {
+      // Optional: an unconfigured or unavailable AI simply means no overview.
+      return null;
+    }
+  },
   async getRoute(origin, destination, options) {
     const route = await api<RouteResult>('/routes/plan', {
       method: 'POST',
