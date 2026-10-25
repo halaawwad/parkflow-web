@@ -13,7 +13,7 @@ import {
   SkeletonGroup,
   TabHeader,
 } from '@/components/ui';
-import { CityPicker } from '@/components/domain/CityPicker';
+import { CityRoutePicker } from '@/components/domain/CityPicker';
 import { RideCard, SpotCard } from '@/components/domain/SharingCards';
 import { useRideSearch, useSpots } from '@/hooks/useSharing';
 import { useUserLocation } from '@/hooks/useUserLocation';
@@ -63,8 +63,7 @@ function RidesSection({ bottom }: { bottom: number }) {
         <AppButton label={t('ride.offer')} size="sm" icon={<Plus size={16} color={colors.onBrand} />} onPress={() => router.push('/rides/new')} style={{ flex: 1 }} />
         <AppButton label={t('ride.mine')} size="sm" variant="secondary" onPress={() => router.push('/rides/mine')} style={{ flex: 1 }} />
       </View>
-      <CityPicker label={t('ride.from')} value={from} onChange={setFrom} allowAny />
-      <CityPicker label={t('ride.to')} value={to} onChange={setTo} allowAny />
+      <CityRoutePicker from={from} to={to} onChangeFrom={setFrom} onChangeTo={setTo} allowAny />
 
       {rides.isPending ? <SkeletonGroup count={3} height={120} />
         : rides.isError ? <ErrorState error={rides.error} onRetry={() => void rides.refetch()} />

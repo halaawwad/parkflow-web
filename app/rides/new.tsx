@@ -14,7 +14,7 @@ import {
   SwitchRow,
   TextField,
 } from '@/components/ui';
-import { CityPicker } from '@/components/domain/CityPicker';
+import { CityRoutePicker } from '@/components/domain/CityPicker';
 import { StepperRow } from '@/components/domain/StepperRow';
 import { useCreateRide, useSetGender } from '@/hooks/useSharing';
 import { useVehicles } from '@/hooks/useVehicles';
@@ -73,8 +73,7 @@ export default function OfferRideScreen() {
       <AppHeader title={t('ride.offer')} subtitle={t('ride.newSubtitle')} leading="close" />
       <View style={{ gap: spacing.lg }}>
         <Card padding="lg" style={{ gap: spacing.lg }}>
-          <CityPicker label={t('ride.from')} value={fromCity} onChange={setFromCity} />
-          <CityPicker label={t('ride.to')} value={toCity} onChange={setToCity} />
+          <CityRoutePicker from={fromCity} to={toCity} onChangeFrom={setFromCity} onChangeTo={setToCity} />
           {sameCity ? <AppText variant="caption" color="danger">{t('ride.sameCity')}</AppText> : null}
           <TextField label={t('ride.meetingPoint')} placeholder={t('ride.meetingPlaceholder')} value={meetingPoint} onChangeText={setMeetingPoint} maxLength={200} />
         </Card>
