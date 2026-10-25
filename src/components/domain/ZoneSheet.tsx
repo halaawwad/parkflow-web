@@ -219,7 +219,7 @@ export function ZoneSheet({
               label={t('zone.maxStay')}
               value={
                 zone.tariff.maxStayMinutes
-                  ? formatDurationShort(zone.tariff.maxStayMinutes * 60)
+                  ? formatDurationShort(zone.tariff.maxStayMinutes * 60, locale)
                   : '—'
               }
             />

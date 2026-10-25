@@ -146,7 +146,7 @@ export default function WalletScreen() {
           <InlineNotice
             tone="warning"
             title={t('parking.lowBalance')}
-            body={t('parking.lowBalanceBody', {
+            body={t('wallet.lowBalanceBody', {
               balance: formatMoney(wallet?.balance ?? 0),
             })}
             action={{ label: t('parking.topUpNow'), onPress: () => router.push('/wallet/topup') }}

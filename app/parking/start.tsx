@@ -255,7 +255,7 @@ export default function StartParkingScreen() {
               label={t('zone.maxStay')}
               value={
                 zone.tariff.maxStayMinutes
-                  ? formatDurationShort(zone.tariff.maxStayMinutes * 60)
+                  ? formatDurationShort(zone.tariff.maxStayMinutes * 60, locale)
                   : '—'
               }
             />
@@ -313,7 +313,7 @@ export default function StartParkingScreen() {
                       scaleTo={0.95}
                       accessibilityRole="radio"
                       accessibilityState={{ selected: active }}
-                      accessibilityLabel={formatDurationShort(option.minutes * 60)}
+                      accessibilityLabel={formatDurationShort(option.minutes * 60, locale)}
                       style={{
                         flex: 1,
                         alignItems: 'center',
@@ -332,7 +332,7 @@ export default function StartParkingScreen() {
                         align="center"
                         style={{ color: active ? colors.successText : colors.text }}
                       >
-                        {formatDurationShort(option.minutes * 60)}
+                        {formatDurationShort(option.minutes * 60, locale)}
                       </AppText>
                       <AppText variant="caption" color="textTertiary" numeric align="center">
                         {formatMoney(estimatePrepaidCost(tariff ?? zone.tariff, option.minutes))}

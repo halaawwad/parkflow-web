@@ -21,12 +21,14 @@ export function formatDuration(totalSeconds: number): string {
   return [hours, minutes, seconds].map((n) => String(n).padStart(2, '0')).join(':');
 }
 
-/** "47 min" / "2h 10m" — for lists where seconds are noise. */
-export function formatDurationShort(totalSeconds: number): string {
+/** "47 min" / "2h 10m" (Arabic "47 د" / "2 س 10 د") — for lists where seconds are noise. */
+export function formatDurationShort(totalSeconds: number, locale: 'ar' | 'en' = 'en'): string {
   const minutes = Math.max(0, Math.round(totalSeconds / 60));
-  if (minutes < 60) return `${minutes} min`;
+  const ar = locale === 'ar';
+  if (minutes < 60) return ar ? `${minutes} د` : `${minutes} min`;
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
+  if (ar) return rest === 0 ? `${hours} س` : `${hours} س ${rest} د`;
   return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
 }
 

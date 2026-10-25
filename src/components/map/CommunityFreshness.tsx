@@ -10,14 +10,19 @@ import { shadow } from '@/theme/shadows';
  * Small pill over the map saying checkpoint states come from user reports and
  * how fresh they are. Turns amber when the live feed is disconnected.
  */
-export function CommunityFreshness({ connected, updatedAt }: { connected: boolean; updatedAt?: number }) {
+export function CommunityFreshness({ connected, updatedAt, showSource = true }: {
+  connected: boolean;
+  updatedAt?: number;
+  /** Off where the screen title already says the data comes from user reports. */
+  showSource?: boolean;
+}) {
   const { t, row, dateLocale, isRTL } = useLocale();
   const { colors } = useTheme();
   const time = updatedAt
     ? new Intl.DateTimeFormat(dateLocale, { hour: 'numeric', minute: '2-digit' }).format(new Date(updatedAt))
     : undefined;
   const text = connected
-    ? [t('roads.community'), time ? t('roads.lastUpdate', { time }) : undefined].filter(Boolean).join(' · ')
+    ? [showSource ? t('roads.community') : undefined, time ? t('roads.lastUpdate', { time }) : undefined].filter(Boolean).join(' · ')
     : t('roads.disconnected');
 
   return (

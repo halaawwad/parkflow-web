@@ -93,7 +93,7 @@ export default function ReserveParkingScreen() {
               onMinus={() => changeDay(-1)} onPlus={() => changeDay(1)} minusDisabled={startMs - 86_400_000 < nextHalfHour()} />
             <PickerRow icon={<Clock3 size={18} color={colors.textSecondary} />} label={t('reservation.arrivalTime')} value={formatTime(start.toISOString(), dateLocale)} row={row}
               onMinus={() => changeTime(-30)} onPlus={() => changeTime(30)} minusDisabled={startMs - HALF_HOUR < nextHalfHour()} />
-            <PickerRow icon={<Timer size={18} color={colors.textSecondary} />} label={t('reservation.duration')} value={formatDurationShort(durationMinutes * 60)} row={row}
+            <PickerRow icon={<Timer size={18} color={colors.textSecondary} />} label={t('reservation.duration')} value={formatDurationShort(durationMinutes * 60, locale)} row={row}
               onMinus={() => setDurationMinutes((value) => Math.max(30, value - 30))}
               onPlus={() => setDurationMinutes((value) => Math.min(maxDuration, value + 30))}
               minusDisabled={durationMinutes <= 30} plusDisabled={durationMinutes >= maxDuration} />

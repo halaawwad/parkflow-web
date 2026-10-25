@@ -54,7 +54,7 @@ export default function ReservationDetailsScreen() {
           <DetailRow label={t('reservation.parkingLocation')} value={locale === 'ar' ? reservation.zone.nameAr : reservation.zone.name} />
           {reservation.spotCode ? <DetailRow label={t('reservation.parkingSpace')} value={reservation.spotCode} /> : null}
           <DetailRow label={t('reservation.arrival')} value={formatDateTime(reservation.startTime, dateLocale)} />
-          <DetailRow label={t('reservation.duration')} value={formatDurationShort(reservation.durationMinutes * 60)} />
+          <DetailRow label={t('reservation.duration')} value={formatDurationShort(reservation.durationMinutes * 60, locale)} />
           <DetailRow label={t('reservation.hourlyRate')} value={`${formatRate(reservation.hourlyRateSnapshot)}${t('common.perHour')}`} />
           <DetailRow label={t('reservation.estimatedTotal')} value={formatMoney(reservation.estimatedTotalPriceSnapshot)} />
           <AppText variant="caption" color="textTertiary">{reservation.priceIsDemo ? t('reservation.demoPrice') : t('reservation.officialPrice')}</AppText>

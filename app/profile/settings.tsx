@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/http/apiClient';
 import { useUserId } from '@/hooks/useSession';
 import { Platform, View } from 'react-native';
-import { Check, Languages, Moon, Sun, SunMoon } from 'lucide-react-native';
+import { Check, Moon, Sun, SunMoon } from 'lucide-react-native';
 
 import {
   AppButton,
@@ -89,10 +89,7 @@ export default function SettingsScreen() {
       <View style={{ gap: spacing.xl }}>
         {/* ---- Language -------------------------------------------------- */}
         <View>
-          <SectionHeader
-            title={t('profile.language')}
-            trailing={<Languages size={20} color={colors.textTertiary} strokeWidth={2.1} />}
-          />
+          <SectionHeader title={t('profile.language')} />
           <Card padding="lg" style={{ paddingVertical: spacing.xs }}>
             {LOCALES.map((option: Locale, index) => {
               const active = option === locale;
@@ -176,7 +173,7 @@ export default function SettingsScreen() {
 
         {/* ---- Voice --------------------------------------------------------- */}
         <View>
-          <SectionHeader title={t('profile.voiceAlerts')} />
+          <SectionHeader title={t('profile.sound')} />
           <Card padding="lg">
             <SwitchRow
               label={t('profile.voiceAlerts')}

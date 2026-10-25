@@ -112,7 +112,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
             // Android adds vertical padding that breaks the centred layout.
             paddingVertical: 0,
           }}
-          placeholderTextColor={colors.textTertiary}
+          placeholderTextColor={colors.placeholder}
           maxFontSizeMultiplier={maxFontSizeMultiplier}
           onFocus={(event) => {
             setFocused(true);

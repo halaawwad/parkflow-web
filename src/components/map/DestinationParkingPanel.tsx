@@ -165,7 +165,7 @@ export function DestinationParkingPanel({
               onSubmitEditing={applyNeeds}
               returnKeyType="search"
               placeholder={t('tripNeeds.placeholder')}
-              placeholderTextColor={colors.textTertiary}
+              placeholderTextColor={colors.placeholder}
               multiline={false}
               style={{
                 flex: 1,

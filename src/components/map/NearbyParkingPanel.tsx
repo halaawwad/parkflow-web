@@ -43,7 +43,7 @@ export function NearbyParkingPanel({
   onSelectZone,
 }: NearbyParkingPanelProps) {
   const { colors } = useTheme();
-  const { t, row } = useLocale();
+  const { t, row, locale } = useLocale();
   const { height: windowHeight } = useWindowDimensions();
   const [full, setFull] = useState(false);
   const Chevron = expanded ? ChevronDown : ChevronUp;
@@ -109,7 +109,7 @@ export function NearbyParkingPanel({
             <View style={{ flex: 1, gap: 2 }}>
               <AppText variant="titleLg">{t('map.nearby')}</AppText>
               <AppText variant="caption" color="textTertiary" numeric>
-                {loading ? t('common.loading') : t('map.zonesFound', { count: zones.length })}
+                {loading ? t('common.loading') : zonesFoundLabel(zones.length, locale, t)}
               </AppText>
             </View>
             <Chevron size={16} color={colors.textTertiary} strokeWidth={2.2} />
@@ -154,4 +154,13 @@ export function NearbyParkingPanel({
       </View>
     </View>
   );
+}
+
+/** Arabic counts agree with the noun: موقف واحد، موقفان، 5 مواقف، 25 موقفًا. */
+function zonesFoundLabel(count: number, locale: 'ar' | 'en', t: ReturnType<typeof useLocale>['t']) {
+  if (locale !== 'ar') return t('map.zonesFound', { count });
+  if (count === 1) return 'موقف واحد';
+  if (count === 2) return 'موقفان';
+  const mod = count % 100;
+  return mod >= 3 && mod <= 10 ? `${count} مواقف` : `${count} موقفًا`;
 }

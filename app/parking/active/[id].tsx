@@ -221,7 +221,7 @@ export default function ActiveParkingScreen() {
                 numeric
                 align="center"
                 style={{ color: colors.onDeep, marginTop: spacing.xs }}
-                accessibilityLabel={`${primaryLabel} ${formatDurationShort(primarySeconds)}`}
+                accessibilityLabel={`${primaryLabel} ${formatDurationShort(primarySeconds, locale)}`}
               >
                 {formatDuration(primarySeconds)}
               </AppText>
@@ -423,7 +423,7 @@ export default function ActiveParkingScreen() {
                   scaleTo={0.95}
                   accessibilityRole="radio"
                   accessibilityState={{ selected: active }}
-                  accessibilityLabel={formatDurationShort(option.minutes * 60)}
+                  accessibilityLabel={formatDurationShort(option.minutes * 60, locale)}
                   style={{
                     flex: 1,
                     alignItems: 'center',
@@ -436,7 +436,7 @@ export default function ActiveParkingScreen() {
                   }}
                 >
                   <AppText variant="title" numeric align="center">
-                    {formatDurationShort(option.minutes * 60)}
+                    {formatDurationShort(option.minutes * 60, locale)}
                   </AppText>
                   <AppText variant="caption" color="textTertiary" numeric align="center">
                     {zone ? formatMoney(estimatePrepaidCost(zone.tariff, option.minutes)) : '—'}

@@ -59,7 +59,7 @@ export function SearchField({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={colors.textTertiary}
+        placeholderTextColor={colors.placeholder}
         onSubmitEditing={onSubmit}
         autoFocus={autoFocus}
         returnKeyType="search"

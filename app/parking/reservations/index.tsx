@@ -45,12 +45,12 @@ export default function ReservationsScreen() {
 }
 
 function ReservationRow({ reservation, locale, dateLocale, t, onPress }: {
-  reservation: ParkingReservation; locale: string; dateLocale: string;
+  reservation: ParkingReservation; locale: 'ar' | 'en'; dateLocale: string;
   t: ReturnType<typeof useLocale>['t']; onPress: () => void;
 }) {
   return <ListItem
     title={locale === 'ar' ? reservation.zone.nameAr : reservation.zone.name}
-    subtitle={`${reservation.spotCode ? `${t('reservation.parkingSpace')} ${reservation.spotCode} · ` : ''}${formatDateTime(reservation.startTime, dateLocale)} · ${formatDurationShort(reservation.durationMinutes * 60)} · ${formatMoney(reservation.estimatedTotalPriceSnapshot)}`}
+    subtitle={`${reservation.spotCode ? `${t('reservation.parkingSpace')} ${reservation.spotCode} · ` : ''}${formatDateTime(reservation.startTime, dateLocale)} · ${formatDurationShort(reservation.durationMinutes * 60, locale)} · ${formatMoney(reservation.estimatedTotalPriceSnapshot)}`}
     trailing={<StatusBadge label={t(`reservation.status.${reservation.status}`)} tone={reservation.status === 'confirmed' || reservation.status === 'checked_in' ? 'success' : 'neutral'} size="sm" />}
     showChevron onPress={onPress}
   />;

@@ -80,6 +80,8 @@ export type ColorScheme = {
   text: string;
   textSecondary: string;
   textTertiary: string;
+  /** Hint text inside empty inputs: clearly lighter than a typed value. */
+  placeholder: string;
   textInverse: string;
   textOnColor: string;
 
@@ -141,6 +143,7 @@ export const lightColors: ColorScheme = {
   // Slightly deepen the secondary gray for readable small text on tinted surfaces.
   textSecondary: palette.neutral600,
   textTertiary: palette.neutral400,
+  placeholder: '#9AA8A1',
   textInverse: palette.white,
   textOnColor: palette.white,
 
@@ -199,6 +202,7 @@ export const darkColors: ColorScheme = {
   text: '#EAF3F0',
   textSecondary: '#9DB2AB',
   textTertiary: '#AABBB2',
+  placeholder: '#6F8478',
   textInverse: palette.neutral900,
   textOnColor: palette.white,
 

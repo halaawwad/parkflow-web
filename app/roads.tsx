@@ -1,5 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import { CheckpointLiveDetails } from '@/components/map/CheckpointLiveDetails';
+import { CommunityFreshness } from '@/components/map/CommunityFreshness';
 import { useCheckpointConnectionStore } from '@/store/checkpointConnectionStore';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -55,8 +56,7 @@ export default function RoadAlertsScreen() {
       <AppHeader title={t('roads.title')} subtitle={t('roads.community')} />
 
       <View style={{ gap: spacing.xl }}>
-        {!connected || isError ? <AppText variant="caption">{t('roads.disconnected')}</AppText> : null}
-        {dataUpdatedAt ? <AppText variant="caption">{t('roads.lastUpdate',{time:new Date(dataUpdatedAt).toLocaleString(locale)})}</AppText> : null}
+        <CommunityFreshness connected={connected && !isError} updatedAt={dataUpdatedAt || undefined} showSource={false} />
         {/* ---- Checkpoints ---------------------------------------------- */}
         <View>
           <SectionHeader title={t('roads.checkpoints')} subtitle={t('roads.reportPrompt')} />
@@ -101,7 +101,8 @@ export default function RoadAlertsScreen() {
                           <AppText variant="title" numberOfLines={1}>
                             {nameOf(checkpoint)}
                           </AppText>
-                          <AppText variant="caption" color="textTertiary">
+                          <AppText variant="caption" color="textTertiary" numberOfLines={1}>
+                            {t(checkpoint.kind==='road_gate'?'roads.roadGate':'roads.checkpointKind')}{' · '}
                             {!checkpoint.enabledForLiveReporting
                               ? t('roads.needsReview')
                               : checkpoint.assumed
@@ -111,7 +112,6 @@ export default function RoadAlertsScreen() {
                                   count: checkpoint.reportCount,
                                 })}
                           </AppText>
-                          <AppText variant="caption" color="textTertiary">{t(checkpoint.kind==='road_gate'?'roads.roadGate':'roads.checkpointKind')}</AppText>
                         </View>
                         {/* Unreported checkpoints already say so in the line above. */}
                         {checkpoint.assumed ? null : (

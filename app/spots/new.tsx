@@ -60,6 +60,8 @@ export default function ListSpotScreen() {
   const canPublish = title.trim().length > 0 && areaHint.trim().length > 0 && fullAddress.trim().length >= 3
     && !hourlyInvalid && !dailyInvalid && weekdays.length > 0 && until > from;
   const names = weekdayNames(dateLocale);
+  // Arabic short names are the full ones ("الأربعاء"); drop "ال" so seven fit on one row.
+  const shortNames = locale === 'ar' ? names.map((name) => name.replace(/^ال/, '')) : names;
 
   const toggleDay = (day: number) => setWeekdays((days) => days.includes(day) ? days.filter((d) => d !== day) : [...days, day].sort());
 
@@ -102,13 +104,16 @@ export default function ListSpotScreen() {
           <TextField label={t('spot.dailyRate')} value={daily} onChangeText={setDaily} keyboardType="decimal-pad" maxLength={6} />
           <View style={{ gap: spacing.sm }}>
             <AppText variant="label" color="textSecondary">{t('spot.days')}</AppText>
-            <View style={{ flexDirection: row, flexWrap: 'wrap', gap: spacing.xs }}>
+            {/* One row of seven equal days, Sunday first, like a calendar week. */}
+            <View style={{ flexDirection: row, gap: 4 }}>
               {names.map((name, day) => {
                 const on = weekdays.includes(day);
                 return (
                   <PressableScale key={day} onPress={() => toggleDay(day)} accessibilityRole="checkbox" accessibilityState={{ checked: on }}
-                    style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: on ? colors.brand : colors.surfaceAlt }}>
-                    <AppText variant="label" style={{ color: on ? colors.onBrand : colors.textSecondary }}>{name}</AppText>
+                    accessibilityLabel={name} {...({ 'aria-checked': on } as object)}
+                    style={{ flex: 1, minWidth: 0, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md,
+                      backgroundColor: on ? colors.brand : colors.surfaceAlt, borderWidth: 1, borderColor: on ? colors.brand : colors.border }}>
+                    <AppText variant="caption" weight="bold" numberOfLines={1} style={{ color: on ? colors.onBrand : colors.textSecondary }}>{shortNames[day]}</AppText>
                   </PressableScale>
                 );
               })}

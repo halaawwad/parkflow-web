@@ -180,7 +180,7 @@ export function VehicleForm({
                   containerStyle={{ flex: 1 }}
                   value={field.value ?? ''}
                   onChangeText={field.onChange}
-                  placeholder="Toyota"
+                  placeholder={t('vehicle.makePlaceholder')}
                   autoCapitalize="words"
                 />
               )}
@@ -194,7 +194,7 @@ export function VehicleForm({
                   containerStyle={{ flex: 1 }}
                   value={field.value ?? ''}
                   onChangeText={field.onChange}
-                  placeholder="Corolla"
+                  placeholder={t('vehicle.modelPlaceholder')}
                   autoCapitalize="words"
                 />
               )}
@@ -209,7 +209,7 @@ export function VehicleForm({
                 label={t('vehicle.color')}
                 value={field.value ?? ''}
                 onChangeText={field.onChange}
-                placeholder="White"
+                placeholder={t('vehicle.colorPlaceholder')}
                 autoCapitalize="words"
               />
             )}

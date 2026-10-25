@@ -629,7 +629,7 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
                 key={checkpoint.id}
                 onPress={() => onSelectCheckpoint?.(checkpoint.id)}
                 accessibilityRole="button"
-                accessibilityLabel={`${checkpoint.name}, ${checkpoint.status}`}
+                accessibilityLabel={`${checkpoint.name}, ${t(`roads.status.${checkpoint.status}` as const)}`}
                 style={{ position: 'absolute', left: x - 75, top: y - 15, width: 150, alignItems: 'center' }}
               >
                 <CheckpointMarker
@@ -681,7 +681,7 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
                 key={report.id}
                 onPress={() => onSelectRoadReport?.(report)}
                 accessibilityRole="button"
-                accessibilityLabel={report.type}
+                accessibilityLabel={t(`roadReports.type.${report.type}` as const)}
                 style={{ position: 'absolute', left: x - 24, top: y - 40, width: 48, alignItems: 'center', zIndex: report.id === selectedRoadReportId ? 6 : 4 }}
               >
                 <RoadReportMarker type={report.type} selected={report.id === selectedRoadReportId} />
@@ -764,7 +764,7 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
                 key={zone.id}
                 onPress={() => onSelectZone(zone)}
                 accessibilityRole="button"
-                accessibilityLabel={`${zone.name}, ${zone.availability}`}
+                accessibilityLabel={`${zone.name}, ${t(`zone.${zone.availability}` as const)}`}
                 style={{
                   position: 'absolute',
                   left: x - 44,
