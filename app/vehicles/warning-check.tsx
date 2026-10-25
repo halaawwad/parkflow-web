@@ -74,7 +74,7 @@ function WarningCard({ warning, location, requestLocation, locationStatus }: {
       <AppText variant="caption">{t(location ? 'warning.byDistance' : 'warning.defaultArea')}</AppText>
       {truncated ? <AppText variant="caption">{t('carServices.truncated')}</AppText> : null}
       {sorted.length === 0 ? <EmptyState compact title={t('warning.noServices')} body={t('warning.noServicesBody')} /> : sorted.map(service => <AppButton
-        key={service.id} variant="secondary" label={`${locale === 'ar' ? service.nameAr : service.nameEn}${location ? ` · ${formatDistance(distanceMeters(location, service))}` : ''}`}
+        key={service.id} variant="secondary" label={`${locale === 'ar' ? service.nameAr : service.nameEn}${location ? ` · ${formatDistance(distanceMeters(location, service), locale)}` : ''}`}
         onPress={() => {
           const category = guidance?.categories.find(c => service.categories.includes(c));
           if (!category) return;

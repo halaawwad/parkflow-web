@@ -96,7 +96,7 @@ export function DestinationParkingPanel({
 
   const topReason = recommendations[0] ? resolvedMatches(recommendations[0]).slice(0, 3) : [];
   const reasonPlaces = joinParts(topReason.map((match) => t('tripNeeds.placeDistance', {
-    distance: formatDistance(match.distanceMeters ?? 0),
+    distance: formatDistance(match.distanceMeters ?? 0, locale),
     name: placeName(match) ?? '',
   })));
   const reason = recommendations[0] && reasonPlaces
@@ -249,7 +249,7 @@ export function DestinationParkingPanel({
                 <AppText variant="caption" color={routeNeedsPlan ? 'textOnColor' : 'textSecondary'} numeric numberOfLines={1}>
                   {t('tripNeeds.routeAdds', {
                     minutes: Math.max(0, Math.round(routeNeedsPlan.addedDurationSeconds / 60)),
-                    distance: formatDistance(routeNeedsPlan.addedDistanceMeters),
+                    distance: formatDistance(routeNeedsPlan.addedDistanceMeters, locale),
                   })}
                 </AppText>
               ) : null}
@@ -310,7 +310,7 @@ export function DestinationParkingPanel({
                   <AppText variant="caption" color="textSecondary" numberOfLines={1} style={{ flex: 1 }}>
                     {t('tripNeeds.stopAdds', {
                       name: locale === 'ar' ? stop.place.nameAr ?? stop.place.name : stop.place.nameEn ?? stop.place.name,
-                      distance: formatDistance(stop.addedDistanceMeters),
+                      distance: formatDistance(stop.addedDistanceMeters, locale),
                       minutes: Math.max(0, Math.round(stop.addedDurationSeconds / 60)),
                     })}
                   </AppText>
@@ -364,7 +364,9 @@ export function DestinationParkingPanel({
                   <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.xs }}>
                     <AppText variant="label" numberOfLines={1} style={{ flex: 1 }}>{name}</AppText>
                     {index === 0 ? (
-                      <AppText variant="caption" color="brand" weight="bold">{t('map.recommended')}</AppText>
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 1, borderRadius: radius.pill, backgroundColor: colors.brand }}>
+                        <AppText variant="caption" color="textOnColor" weight="bold">{t('map.recommended')}</AppText>
+                      </View>
                     ) : null}
                   </View>
                   <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm }}>
@@ -390,7 +392,7 @@ export function DestinationParkingPanel({
                           </AppText>
                           <AppText variant="caption" color="textTertiary" numberOfLines={1} style={{ flex: 1 }}>
                             {t('tripNeeds.placeDistance', {
-                              distance: formatDistance(match.distanceMeters ?? 0),
+                              distance: formatDistance(match.distanceMeters ?? 0, locale),
                               name: placeName(match) ?? '',
                             })}
                           </AppText>
@@ -399,9 +401,18 @@ export function DestinationParkingPanel({
                     </View>
                   ) : null}
                 </View>
-                <View style={{ alignItems: row === 'row-reverse' ? 'flex-start' : 'flex-end' }}>
-                  <AppText variant="label" color="brand" numeric>{formatRate(zone.tariff.hourlyRate)}</AppText>
-                  <AppText variant="caption" color="textTertiary">{t('common.perHour')}</AppText>
+                <View
+                  style={{
+                    alignSelf: 'center',
+                    paddingVertical: 4,
+                    paddingHorizontal: spacing.sm,
+                    borderRadius: radius.pill,
+                    backgroundColor: index === 0 ? colors.surface : colors.brandSofter,
+                  }}
+                >
+                  <AppText variant="caption" color="brand" weight="bold" numeric numberOfLines={1}>
+                    {`${formatRate(zone.tariff.hourlyRate)} ${t('common.perHour')}`}
+                  </AppText>
                 </View>
               </PressableScale>
             );

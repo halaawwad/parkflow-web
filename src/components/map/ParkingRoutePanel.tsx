@@ -63,7 +63,7 @@ export function ParkingRoutePanel({ location, route, loading, onCancel }: Parkin
           <AppText variant="caption" color="brand" numeric>
             {t('route.summary', {
               minutes: Math.max(1, Math.round(route.durationSeconds / 60)),
-              distance: formatDistance(route.distanceMeters),
+              distance: formatDistance(route.distanceMeters, locale),
             })}
           </AppText>
         ) : (

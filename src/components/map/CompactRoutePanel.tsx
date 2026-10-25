@@ -198,7 +198,7 @@ export function CompactRoutePanel({
   const issueText = primaryImpact
     ? primaryImpact.distanceAheadMeters === undefined
       ? t('route.issueOnRoute', { type: issueName })
-      : t('route.issueAhead', { type: issueName, distance: formatDistance(primaryImpact.distanceAheadMeters) })
+      : t('route.issueAhead', { type: issueName, distance: formatDistance(primaryImpact.distanceAheadMeters, locale) })
     : '';
   const destinationActionLabel =
     destination.type === 'parking'
@@ -214,20 +214,20 @@ export function CompactRoutePanel({
   const needAwareSummary = routeNeedsComparison
     ? t('route.summary', {
         minutes: routeMinutes(routeNeedsComparison.needAware.durationSeconds),
-        distance: formatDistance(routeNeedsComparison.needAware.distanceMeters),
+        distance: formatDistance(routeNeedsComparison.needAware.distanceMeters, locale),
       })
     : '';
   const shortestSummary = routeNeedsComparison
     ? t('route.summary', {
         minutes: routeMinutes(routeNeedsComparison.shortest.durationSeconds),
-        distance: formatDistance(routeNeedsComparison.shortest.distanceMeters),
+        distance: formatDistance(routeNeedsComparison.shortest.distanceMeters, locale),
       })
     : '';
   const walking = travelMode === 'walking';
   // A straight line is not a walking route: say so instead of offering to navigate along it.
   const noWalkingRoute = walking && route?.source === 'straight-line';
   const differenceSummary = routeNeedsComparison
-    ? `${extraDurationLabel(routeNeedsComparison.extraDurationSeconds, locale)} · +${formatDistance(routeNeedsComparison.extraDistanceMeters)} · +${routeNeedsComparison.extraPercent}%`
+    ? `${extraDurationLabel(routeNeedsComparison.extraDurationSeconds, locale)} · +${formatDistance(routeNeedsComparison.extraDistanceMeters, locale)} · +${routeNeedsComparison.extraPercent}%`
     : '';
 
   return (
@@ -247,7 +247,7 @@ export function CompactRoutePanel({
           <View style={{ flexDirection: row, alignItems: 'center', gap: 4 }}>
             {walking ? <Footprints size={15} color={colors.brand} strokeWidth={2.4} /> : null}
             <AppText variant="title" color="brand" numeric>
-              {t(walking ? 'route.walkSummary' : 'route.summary', { minutes: Math.max(1, Math.round(route.durationSeconds / 60)), distance: formatDistance(route.distanceMeters) })}
+              {t(walking ? 'route.walkSummary' : 'route.summary', { minutes: Math.max(1, Math.round(route.durationSeconds / 60)), distance: formatDistance(route.distanceMeters, locale) })}
             </AppText>
           </View>
         ) : loading ? (
@@ -303,7 +303,7 @@ export function CompactRoutePanel({
                 <AppText variant="caption" color="dangerText" weight="bold" style={{ flex: 1 }}>
                   {t('route.needAwareLongWarning', {
                     minutes: Math.max(1, Math.round(routeNeedsComparison.extraDurationSeconds / 60)),
-                    distance: formatDistance(routeNeedsComparison.extraDistanceMeters),
+                    distance: formatDistance(routeNeedsComparison.extraDistanceMeters, locale),
                   })}
                 </AppText>
               </View>

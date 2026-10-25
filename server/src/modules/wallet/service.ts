@@ -3,6 +3,7 @@ import { db,atomic,lock,json } from '../../database/client';
 import { idempotent } from '../../utils/idempotency';
 import { assert,requireValue } from '../../utils/errors';
 import { post } from './ledger';
+import { withReadableArabic } from './arabicTitles';
 import { payments,tokenize,type PaymentResult } from '../../providers/payments';
 import { env } from '../../config/env';
 import { notify } from '../notifications/service';
@@ -14,8 +15,8 @@ export async function addMethod(userId:string,input:{last4:string;brand:string;e
 export async function defaultMethod(userId:string,id:string){await atomic(async tx=>{await lock(tx,`wallet:${userId}`);requireValue(await tx.paymentMethod.findFirst({where:{userId,id,deletedAt:null}}));await tx.paymentMethod.updateMany({where:{userId},data:{isDefault:false}});await tx.paymentMethod.update({where:{id},data:{isDefault:true}});await tx.wallet.update({where:{userId},data:{defaultPaymentMethodId:id}});});}
 export async function removeMethod(userId:string,id:string){await atomic(async tx=>{await lock(tx,`wallet:${userId}`);const m=requireValue(await tx.paymentMethod.findFirst({where:{id,userId,deletedAt:null}}));await tx.paymentMethod.update({where:{id},data:{deletedAt:new Date(),isDefault:false}});if(m.isDefault){const next=await tx.paymentMethod.findFirst({where:{userId,deletedAt:null}});if(next)await tx.paymentMethod.update({where:{id:next.id},data:{isDefault:true}});await tx.wallet.update({where:{userId},data:{defaultPaymentMethodId:next?.id??null,autoTopUpEnabled:!!next&&(await get(userId)).autoTopUpEnabled}});}});}
 export async function autoTopup(userId:string,input:{enabled:boolean;threshold?:number;amount?:number}){const w=await get(userId);assert(!input.enabled||w.defaultPaymentMethodId,'VALIDATION','Add a payment method first');return db.wallet.update({where:{userId},data:{autoTopUpEnabled:input.enabled,autoTopUpThreshold:input.threshold,autoTopUpAmount:input.amount}});}
-export async function transactions(userId:string,types?:string[],limit=100){const w=await get(userId);const rows=await db.walletTransaction.findMany({where:{walletId:w.id,...(types?.length?{type:{in:types as TransactionType[]}}:{})},orderBy:{createdAt:'desc'},take:limit});return rows.map(t=>({...t,userId,currency:'ILS'}));}
-export async function transaction(userId:string,id:string){const t=requireValue(await db.walletTransaction.findFirst({where:{id,wallet:{userId}}}));return {...t,userId,currency:'ILS'};}
+export async function transactions(userId:string,types?:string[],limit=100){const w=await get(userId);const rows=await db.walletTransaction.findMany({where:{walletId:w.id,...(types?.length?{type:{in:types as TransactionType[]}}:{})},orderBy:{createdAt:'desc'},take:limit});return rows.map(t=>({...withReadableArabic(t),userId,currency:'ILS'}));}
+export async function transaction(userId:string,id:string){const t=requireValue(await db.walletTransaction.findFirst({where:{id,wallet:{userId}}}));return {...withReadableArabic(t),userId,currency:'ILS'};}
 export async function confirmPayment(id:string,result:PaymentResult){return atomic(async tx=>{await lock(tx,`payment:${id}`);const p=requireValue(await tx.payment.findUnique({where:{id},include:{method:true}}));assert(result.amount===p.amount&&result.currency===p.currency,'PAYMENT_MISMATCH','Payment amount mismatch',409);
  if(p.ledgerId)return; if(result.status==='pending')return;
  const ledger=await post(tx,p.method.userId,{amount:p.amount,type:'topup',status:result.status,title:'Wallet Top-up',titleAr:'شحن المحفظة',paymentMethodId:p.paymentMethodId});await tx.payment.update({where:{id},data:{status:result.status,ledgerId:ledger.id}});

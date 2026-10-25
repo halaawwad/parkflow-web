@@ -125,7 +125,7 @@ export function ZoneCard({ zone, distanceMeters, onPress, width = 236 }: ZoneCar
               </AppText>
             </View>
             <AppText variant="caption" color="textTertiary" numeric>
-              {formatDistance(distanceMeters)}
+              {formatDistance(distanceMeters, locale)}
             </AppText>
           </View>
         ) : null}

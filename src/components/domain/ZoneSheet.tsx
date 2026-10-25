@@ -160,7 +160,7 @@ export function ZoneSheet({
           )}
           {distanceMeters != null ? (
             <AppText variant="bodySm" color="textTertiary">
-              {formatDistance(distanceMeters)} {t('common.away')}
+              {formatDistance(distanceMeters, locale)} {t('common.away')}
             </AppText>
           ) : null}
         </View>

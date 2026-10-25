@@ -5,8 +5,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 
-import { Reveal, AppText } from '@/components/ui';
-import { radius } from '@/theme/radius';
+import { Reveal } from '@/components/ui';
 import { MapSurface } from '@/components/map/MapSurface';
 import type { MapCheckpoint, MapNavigation, MapRoute, MapSurfaceHandle } from '@/components/map/types';
 import { NavigationOverlay } from '@/components/map/navigation/NavigationOverlay';
@@ -17,6 +16,7 @@ import { MapControlRail } from '@/components/map/MapControlRail';
 import { NearbyParkingPanel } from '@/components/map/NearbyParkingPanel';
 import type { NearbyZone } from '@/components/map/CompactZoneCard';
 import { CompactRoutePanel } from '@/components/map/CompactRoutePanel';
+import { CommunityFreshness } from '@/components/map/CommunityFreshness';
 import { TestLocationControl } from '@/components/map/TestLocationControl';
 import { VehicleSelectorSheet } from '@/components/domain/VehicleSelectorSheet';
 import { ZoneSheet } from '@/components/domain/ZoneSheet';
@@ -1318,11 +1318,9 @@ export default function MapScreen() {
           paddingHorizontal: spacing.md,
         }}
       >
-        {checkpointsEnabled && !routeNeedsVisible && !reportLocationPicking && !reportStep && !selectedReport ? <View style={{backgroundColor:colors.surface,borderRadius:radius.md,padding:spacing.xs}}>
-          <AppText variant="caption">{t('roads.community')}</AppText>
-          {!checkpointsConnected || checkpointsError ? <AppText variant="caption">{t('roads.disconnected')}</AppText> : null}
-          {checkpointsUpdatedAt ? <AppText variant="caption">{t('roads.lastUpdate',{time:new Date(checkpointsUpdatedAt).toLocaleTimeString(locale)})}</AppText> : null}
-        </View> : null}
+        {checkpointsEnabled && !routeNeedsVisible && !reportLocationPicking && !reportStep && !selectedReport && !selectedDestination && !routeTarget && !suggestionsOpen ? (
+          <CommunityFreshness connected={checkpointsConnected && !checkpointsError} updatedAt={checkpointsUpdatedAt || undefined} />
+        ) : null}
 
         {!reportLocationPicking && !reportStep && !selectedReport && bannerSession ? (
           <Reveal offset={10}>

@@ -14,9 +14,11 @@ export function distanceMeters(a: GeoPoint, b: GeoPoint): number {
   return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(h));
 }
 
-export function formatDistance(meters: number): string {
-  if (meters < 1000) return `${Math.round(meters / 10) * 10} m`;
-  return `${(meters / 1000).toFixed(1)} km`;
+/** Short distance label; Arabic uses م / كم so the unit matches the surrounding text. */
+export function formatDistance(meters: number, locale: 'ar' | 'en' = 'en'): string {
+  const [m, km] = locale === 'ar' ? ['م', 'كم'] : ['m', 'km'];
+  if (meters < 1000) return `${Math.round(meters / 10) * 10} ${m}`;
+  return `${(meters / 1000).toFixed(1)} ${km}`;
 }
 
 /**
