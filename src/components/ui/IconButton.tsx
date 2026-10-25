@@ -32,7 +32,7 @@ export function IconButton({
   const { colors } = useTheme();
 
   const toneStyle: ViewStyle = {
-    surface: { backgroundColor: colors.surface, ...shadow.sm },
+    surface: { backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth * 2, borderColor: colors.divider, ...shadow.sm },
     ghost: { backgroundColor: 'transparent' },
     brand: { backgroundColor: colors.brand, ...shadow.sm },
     glass: {

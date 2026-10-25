@@ -3,6 +3,7 @@ import { AppText } from './AppText';
 import { PressableScale } from './PressableScale';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius } from '@/theme/radius';
+import { shadow } from '@/theme/shadows';
 import { spacing } from '@/theme/spacing';
 import { useLocale } from '@/hooks/useLocale';
 
@@ -51,7 +52,9 @@ export function Segmented<T extends string>({
           gap: spacing.xs + 2,
           paddingHorizontal: variant === 'inset' ? spacing.sm : spacing.lg,
           minHeight: 44,
-          borderRadius: radius.md,
+          borderRadius: variant === 'inset' ? radius.sm : radius.pill,
+          // The selected inset segment is a raised chip on the track.
+          ...(active && variant === 'inset' ? shadow.xs : null),
           backgroundColor: active
             ? variant === 'inset'
               ? colors.surface

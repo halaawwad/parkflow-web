@@ -1,6 +1,6 @@
 import { forwardRef, useState, type ReactNode } from 'react';
 import {
-  StyleSheet,
+  Platform,
   TextInput,
   View,
   type StyleProp,
@@ -27,6 +27,10 @@ export interface TextFieldProps extends Omit<TextInputProps, 'style'> {
   containerStyle?: StyleProp<ViewStyle>;
   inputStyle?: StyleProp<ViewStyle>;
 }
+
+/** A soft ring outside the field. Web draws it as a spread shadow; native leans on the border colour. */
+const focusHalo = (color: string): ViewStyle =>
+  Platform.OS === 'web' ? ({ boxShadow: `0 0 0 4px ${color}` } as ViewStyle) : {};
 
 export const TextField = forwardRef<TextInput, TextFieldProps>(function TextField(
   {
@@ -66,8 +70,10 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
       : focus.value > 0.5
         ? colors.brand
         : colors.border,
-    borderWidth: focus.value > 0.5 || error ? 2 : StyleSheet.hairlineWidth * 2,
+    // A constant width: focus shows as colour plus a soft halo, so nothing shifts.
+    borderWidth: 1.5,
   }));
+  const halo = focused || error ? { ...focusHalo(error ? colors.dangerSoft : colors.brandSoft) } : null;
 
   return (
     <View style={[{ gap: spacing.sm }, containerStyle]}>
@@ -89,6 +95,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
             minHeight: emphasis === 'strong' ? 64 : 56,
           },
           animatedBorder,
+          halo,
           inputStyle,
         ]}
       >

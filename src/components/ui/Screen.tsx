@@ -10,6 +10,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/theme/ThemeProvider';
 import { screenPadding, spacing } from '@/theme/spacing';
 
@@ -92,6 +93,16 @@ export function Screen({
 
   return (
     <View testID={testID} style={[{ flex: 1, backgroundColor: background }, style]}>
+      {tone === 'default' ? (
+        // A faint wash of the brand at the top of every screen: depth without decoration.
+        <LinearGradient
+          pointerEvents="none"
+          colors={[colors.brandSoft, colors.background]}
+          start={{ x: 0.15, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 320, opacity: isDark ? 0.9 : 0.75 }}
+        />
+      ) : null}
       <StatusBar
         barStyle={tone === 'deep' || isDark ? 'light-content' : 'dark-content'}
         backgroundColor="transparent"

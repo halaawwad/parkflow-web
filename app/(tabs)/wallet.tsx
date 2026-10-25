@@ -8,6 +8,7 @@ import {
   AppButton,
   AppText,
   Card,
+  HeroSurface,
   Divider,
   ErrorState,
   InlineNotice,
@@ -73,13 +74,7 @@ export default function WalletScreen() {
         <DemoPaymentNotice />
 
         {/* ---- Balance card -------------------------------------------- */}
-        <View style={[{ borderRadius: radius.xxl, overflow: 'hidden' }, shadow.sm]}>
-          <LinearGradient
-            colors={[colors.deep, colors.deepAlt]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ padding: spacing.xxl, gap: spacing.xl }}
-          >
+        <HeroSurface contentStyle={{ gap: spacing.xl }}>
             <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.md }}>
               <View
                 style={{
@@ -139,8 +134,7 @@ export default function WalletScreen() {
                 style={{ height: 48, paddingHorizontal: spacing.lg }}
               />
             </View>
-          </LinearGradient>
-        </View>
+        </HeroSurface>
 
         {isLow ? (
           <InlineNotice

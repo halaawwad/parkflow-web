@@ -1,4 +1,4 @@
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,12 +6,12 @@ import { StatusBar } from 'expo-status-bar';
 import { useMutation } from '@tanstack/react-query';
 import { MapPin, Wallet, BellRing } from 'lucide-react-native';
 
-import { AppButton, AppText, Reveal } from '@/components/ui';
+import { AppButton, AppText, ContourLines, Reveal } from '@/components/ui';
 import { LogoMark } from '@/components/brand/Logo';
 import { useTheme } from '@/theme/ThemeProvider';
+import { darkColors } from '@/theme/colors';
 import { spacing, screenPadding } from '@/theme/spacing';
 import { radius } from '@/theme/radius';
-import { shadow } from '@/theme/shadows';
 import { useLocale } from '@/hooks/useLocale';
 import { services } from '@/services';
 import { useAuthStore } from '@/store/authStore';
@@ -56,27 +56,32 @@ export default function WelcomeScreen() {
     onError: () => haptics.error(),
   });
 
+  // The first screen is the brand: deep emerald, contour lines and brass, in both themes.
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <StatusBar style={isDark ? "light" : "dark"} />
+    <View style={{ flex: 1, backgroundColor: colors.deepAlt }}>
+      <StatusBar style="light" />
 
+      {/* Scrolls on short screens so every action stays on the deep stage. */}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} bounces={false} showsVerticalScrollIndicator={false}>
       <LinearGradient
-        colors={[colors.brandSoft, colors.background, colors.background]}
-        locations={[0, 0.55, 1]}
-        style={{ flex: 1 }}
+        colors={[colors.deep, colors.deepAlt, colors.deepAlt]}
+        locations={[0, 0.6, 1]}
+        style={{ flexGrow: 1, minHeight: height }}
       >
-        {/* Soft light bloom behind the mark — one gradient, used once. */}
+        <ContourLines style={{ height: height * 0.62, bottom: undefined }} />
+        {/* Soft light bloom behind the mark. */}
         <View
           pointerEvents="none"
           style={{
             position: 'absolute',
-            top: height * 0.08,
+            top: height * 0.04,
             alignSelf: 'center',
-            width: 300,
-            height: 300,
-            borderRadius: 150,
+            width: 320,
+            height: 320,
+            borderRadius: 160,
             backgroundColor: colors.brand,
-            opacity: 0.025,
+            opacity: isDark ? 0.08 : 0.16,
+            ...(Platform.OS === 'web' ? ({ filter: 'blur(60px)' } as object) : null),
           }}
         />
 
@@ -89,24 +94,24 @@ export default function WelcomeScreen() {
           }}
         >
           <Reveal delay={80} style={{ alignItems: 'center' }}>
-            <LogoMark size={92} tone="dark" />
+            <LogoMark size={92} tone="light" />
           </Reveal>
 
           <Reveal delay={180} style={{ marginTop: spacing.xxxl, gap: spacing.md }}>
-            <AppText variant="display" align="center" color="text">
+            <AppText variant="display" align="center" color="onDeep">
               {t('brand.name')}
             </AppText>
             <AppText
               variant="h2"
               align="center"
-              style={{ color: colors.brand, letterSpacing: -0.2 }}
+              style={{ color: colors.accent, letterSpacing: -0.2 }}
             >
               {t('brand.tagline')}
             </AppText>
             <AppText
               variant="bodyLg"
               align="center"
-              color="textSecondary"
+              color="onDeepMuted"
               style={{ maxWidth: 320, alignSelf: 'center' }}
             >
               {t('brand.subtitle')}
@@ -126,10 +131,11 @@ export default function WelcomeScreen() {
                   paddingVertical: spacing.sm,
                   paddingHorizontal: spacing.md,
                   borderRadius: radius.lg,
-                  backgroundColor: colors.surface,
+                  // Frosted glass over the deep stage.
+                  backgroundColor: 'rgba(255,255,255,0.06)',
                   borderWidth: StyleSheet.hairlineWidth * 2,
-                  borderColor: colors.border,
-                  ...shadow.xs,
+                  borderColor: 'rgba(255,255,255,0.10)',
+                  ...(Platform.OS === 'web' ? ({ backdropFilter: 'blur(12px)' } as object) : null),
                 }}
               >
                 <View
@@ -139,15 +145,15 @@ export default function WelcomeScreen() {
                     borderRadius: radius.sm,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: colors.brandSoft,
+                    backgroundColor: 'rgba(255,255,255,0.10)',
                   }}
                 >
-                  <Icon size={16} color={colors.brand} strokeWidth={2.2} />
+                  <Icon size={16} color={colors.accent} strokeWidth={2.2} />
                 </View>
-                <AppText variant="title" color="text" style={{ flex: 1 }}>
+                <AppText variant="title" color="onDeep" style={{ flex: 1 }}>
                   {label}
                 </AppText>
-                <AppText variant="caption" color="textTertiary" numeric>
+                <AppText variant="caption" color="onDeepMuted" numeric>
                   {String(index + 1).padStart(2, '0')}
                 </AppText>
               </View>
@@ -158,13 +164,13 @@ export default function WelcomeScreen() {
             <AppButton
               label={t('onboarding.getStarted')}
               onPress={goToEmail}
-              variant="primary"
+              variant="inverse"
               testID="welcome-get-started"
             />
             <AppButton
               label={t('onboarding.login')}
               onPress={goToEmail}
-              variant="ghost"
+              variant="ghostInverse"
               style={{ height: 44 }}
             />
             {devQuickLogin ? (
@@ -172,19 +178,20 @@ export default function WelcomeScreen() {
                 label={t('onboarding.quickLogin')}
                 onPress={() => quickLogin.mutate()}
                 loading={quickLogin.isPending}
-                variant="ghost"
+                variant="ghostInverse"
                 style={{ height: 44 }}
                 testID="welcome-quick-login"
               />
             ) : null}
             {quickLogin.isError ? (
-              <AppText variant="caption" color="danger" align="center">
+              <AppText variant="caption" align="center" style={{ color: darkColors.dangerText }}>
                 {errorMessage(quickLogin.error)}
               </AppText>
             ) : null}
           </Reveal>
         </View>
       </LinearGradient>
+      </ScrollView>
     </View>
   );
 }

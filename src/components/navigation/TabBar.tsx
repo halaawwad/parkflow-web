@@ -1,4 +1,4 @@
-import { View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import type { BottomTabBarProps } from 'expo-router/build/react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
@@ -108,9 +108,10 @@ function TabItem({
 
       <AppText
         variant="caption"
+        weight={focused ? 'bold' : 'medium'}
         numberOfLines={1}
         style={{
-          color: focused ? colors.text : colors.textTertiary,
+          color: focused ? colors.brand : colors.textTertiary,
           fontSize: 12,
         }}
       >
@@ -149,14 +150,16 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
           {
             flexDirection: row,
             alignItems: 'center',
-            backgroundColor: colors.surface,
+            backgroundColor: colors.glass,
             borderRadius: radius.xxl,
             paddingHorizontal: spacing.xs,
             paddingVertical: spacing.xs,
-            borderWidth: 0,
-            borderColor: colors.border,
+            borderWidth: StyleSheet.hairlineWidth * 2,
+            borderColor: colors.glassBorder,
           },
-          shadow.md,
+          // Frosted over the map and lists on web; native keeps the near-opaque glass colour.
+          Platform.OS === 'web' ? ({ backdropFilter: 'blur(18px) saturate(1.4)' } as object) : null,
+          shadow.lg,
         ]}
       >
         {state.routes.map((route, index) => {
