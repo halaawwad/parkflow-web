@@ -54,7 +54,7 @@ returned, so these are **simulated** positions.
 
 **What was checked:**
 - **Mode switch:** switching to walking re-planned the route (640 m by car vs 580 m on foot, with different turns) and drew it dotted.
-- **Start:** the button read "ابدأ ملاحة المشي", and starting said "بدأت ملاحة المشي".
+- **Start:** the button read "ابدأ المشي", and starting said "بدأنا المشي إلى وجهتك.".
 - **Prompts:** each turn got one advance prompt, one prepare prompt and one "now" prompt, in Arabic, with correct left/right.
 - **Detour:** a 45 m detour gave exactly one "ابتعدت عن المسار. جاري حساب طريق جديد.", a new 373 m walking route, and no repeats while standing still for 25 s.
 - **Arrival:** walking the new route gave "لقد وصلت إلى وجهتك، على يسارك" and the arrival panel, and GPS watchers dropped to 0.

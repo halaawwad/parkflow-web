@@ -92,7 +92,7 @@ Every instruction comes from a step the router returned. Prompts are tied to dis
   announcement is also mirrored to a screen-reader live region.
 
 **Walking phrases:**
-- start: "Walking navigation started." / "بدأت ملاحة المشي."
+- start: "Walking guidance started." / "بدأنا المشي إلى وجهتك."
 - off route: "You are off the route. Calculating a new walking route." / "ابتعدت عن المسار. جاري حساب طريق جديد."
 - wrong way: "You seem to be walking the wrong way." / "يبدو أنك تمشي في الاتجاه المعاكس."
 - arrival: "You have arrived at your destination, on the left." / "لقد وصلت إلى وجهتك، على يسارك."

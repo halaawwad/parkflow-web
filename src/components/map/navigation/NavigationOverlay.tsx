@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, type ReactNode } from 'react';
+import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import {
   Car,
@@ -47,6 +47,8 @@ import { ManeuverIcon } from './ManeuverIcon';
 
 const CONTROL_HEIGHT = 64;
 const THEN_VISIBLE_METERS = 300;
+/** The end-trip question goes away by itself if it is not answered. */
+const END_CONFIRM_MS = 6_000;
 
 function formatEta(seconds: number, dateLocale: string) {
   const eta = new Date(Date.now() + seconds * 1000);
@@ -287,6 +289,13 @@ export function NavigationOverlay({
   const { t, locale, row, dateLocale, isRTL } = useLocale();
   const insets = useSafeAreaInsets();
   const [stepsOpen, setStepsOpen] = useState(false);
+  // Ending a trip asks once: a stray tap while walking must not throw the route away.
+  const [confirmingEnd, setConfirmingEnd] = useState(false);
+  useEffect(() => {
+    if (!confirmingEnd) return;
+    const timer = setTimeout(() => setConfirmingEnd(false), END_CONFIRM_MS);
+    return () => clearTimeout(timer);
+  }, [confirmingEnd]);
   const { state } = nav;
   const route = state.route;
   const progress = state.progress;
@@ -455,13 +464,22 @@ export function NavigationOverlay({
                 <View style={[styles.divider, { backgroundColor: colors.divider }]} />
                 <Stat value={remainingDistance} label={destinationName} />
               </View>
+              {confirmingEnd ? (
+              <View testID="navigation-end-confirm" accessible accessibilityRole="alert" style={{ gap: spacing.sm }}>
+                <AppText variant="title" align="center">{t('nav.endConfirmTitle')}</AppText>
+                <View style={{ flexDirection: row, gap: spacing.sm }}>
+                  <AppButton testID="navigation-keep-going" label={t('nav.keepGoing')} variant="secondary" size="lg" style={{ flex: 1 }} onPress={() => setConfirmingEnd(false)} />
+                  <AppButton testID="navigation-end-confirm-yes" label={t('nav.endNavigation')} variant="danger" size="lg" style={{ flex: 1 }} onPress={nav.stop} />
+                </View>
+              </View>
+              ) : (
               <View style={{ flexDirection: row, gap: spacing.sm }}>
                 <ControlButton
                   testID="navigation-end"
                   icon={<X size={22} color={colors.dangerText} strokeWidth={2.6} />}
                   label={t('nav.end')}
                   accessibilityLabel={t('nav.endNavigation')}
-                  onPress={nav.stop}
+                  onPress={() => setConfirmingEnd(true)}
                   tone="danger"
                 />
                 <ControlButton
@@ -495,6 +513,7 @@ export function NavigationOverlay({
                   onPress={() => setStepsOpen(true)}
                 />
               </View>
+              )}
             </Panel>
           </Reveal>
         ) : null}

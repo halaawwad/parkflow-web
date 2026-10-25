@@ -142,7 +142,7 @@ describe('walking voice guidance', () => {
   it('speaks walking wording in Arabic and English', () => {
     expect(systemPhrases.rerouting('ar', 'walking')).toBe('ابتعدت عن المسار. جاري حساب طريق جديد.');
     expect(systemPhrases.rerouting('en', 'walking')).toBe('You are off the route. Calculating a new walking route.');
-    expect(systemPhrases.start('en', 'walking')).toBe('Walking navigation started.');
+    expect(systemPhrases.start('en', 'walking')).toBe('Walking guidance started.');
     expect(continuePhrase(300, 'ar', 'walking')).toBe('تابع السير لمسافة 300 متر.');
     expect(continuePhrase(300, 'en', 'walking')).toBe('Continue walking for 300 meters.');
     // Driving wording is unchanged.

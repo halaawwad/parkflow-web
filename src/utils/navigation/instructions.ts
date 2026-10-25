@@ -190,8 +190,8 @@ export function arrivedPhrase(side: Maneuver['side'], locale: GuidanceLocale, wa
 export const systemPhrases = {
   start: (locale: GuidanceLocale, profile: TravelMode = 'driving') =>
     profile === 'walking'
-      ? locale === 'ar' ? 'بدأت ملاحة المشي.' : 'Walking navigation started.'
-      : locale === 'ar' ? 'بدأت الملاحة.' : 'Navigation started.',
+      ? locale === 'ar' ? 'بدأنا المشي إلى وجهتك.' : 'Walking guidance started.'
+      : locale === 'ar' ? 'بدأنا الرحلة إلى وجهتك.' : 'Trip started.',
   rerouting: (locale: GuidanceLocale, profile: TravelMode = 'driving') =>
     profile === 'walking'
       ? locale === 'ar' ? 'ابتعدت عن المسار. جاري حساب طريق جديد.' : 'You are off the route. Calculating a new walking route.'
@@ -214,7 +214,7 @@ export const systemPhrases = {
     locale === 'ar'
       ? 'تعذّر تحديث المسار بسبب انقطاع الاتصال. سأحاول مجددًا.'
       : 'Could not update the route while offline. Trying again.',
-  stopped: (locale: GuidanceLocale) => (locale === 'ar' ? 'انتهت الملاحة.' : 'Navigation ended.'),
-  paused: (locale: GuidanceLocale) => (locale === 'ar' ? 'تم إيقاف الملاحة مؤقتًا.' : 'Navigation paused.'),
-  resumed: (locale: GuidanceLocale) => (locale === 'ar' ? 'تم استئناف الملاحة.' : 'Navigation resumed.'),
+  stopped: (locale: GuidanceLocale) => (locale === 'ar' ? 'انتهت الرحلة.' : 'Trip ended.'),
+  paused: (locale: GuidanceLocale) => (locale === 'ar' ? 'تم إيقاف الإرشاد مؤقتًا.' : 'Guidance paused.'),
+  resumed: (locale: GuidanceLocale) => (locale === 'ar' ? 'تم استئناف الإرشاد.' : 'Guidance resumed.'),
 };
