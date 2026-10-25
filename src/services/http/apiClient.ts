@@ -3,6 +3,15 @@ import { useAuthStore } from '@/store/authStore';
 import { AppError,type AppErrorCode } from '@/utils/errors';
 import { secureStorage } from '../storage';
 import { useApiConnectionStore } from '@/store/apiConnectionStore';
+import { STORAGE_KEYS } from '../storage';
+import type { User } from '@/types';
+type WebLocks={request<T>(name:string,run:()=>Promise<T>):Promise<T>};
+// Web Locks exist only in browsers; native has a single app instance and needs none.
+const webLocks=typeof navigator!=='undefined'?(navigator as unknown as {locks?:WebLocks}).locks:undefined;
+const withRefreshLock=<T,>(run:()=>Promise<T>):Promise<T>=>webLocks?webLocks.request('parkflow-auth-refresh',run):run();
+async function storedSession():Promise<{session:AuthSession;user:User}|undefined>{
+ try{const raw=await secureStorage.getItem(STORAGE_KEYS.authSession);const parsed=raw?JSON.parse(raw):undefined;return parsed?.session&&parsed?.user?parsed:undefined;}catch{return undefined;}
+}
 export const API_BASE_URL=process.env.EXPO_PUBLIC_API_BASE_URL?.replace(/\/$/,'');
 const COLD_START_TIMEOUT_MS=75000, WARM_TIMEOUT_MS=20000, IDLE_MS=5*60000, SLOW_REQUEST_MS=8000;
 let lastResponseAt=0;
@@ -20,6 +29,15 @@ export async function refreshSession():Promise<AuthSession>{
  if(!previous)throw new AppError('unauthorized','Sign in to continue');
  if(refreshing?.token===previous.refreshToken)return refreshing.promise;
  const promise=(async()=>{try{
+ // Browser tabs share one stored session. Only one tab may rotate the refresh token at a
+ // time: the server treats a second use of the old token as theft and ends every session.
+ // The new session is saved before the lock is released, so a waiting tab finds it.
+ return await withRefreshLock(async()=>{
+ const stored=await storedSession();
+ if(stored&&stored.session.userId===previous.userId&&stored.session.refreshToken!==previous.refreshToken
+   &&Date.parse(stored.session.expiresAt)>Date.now()){
+  await useAuthStore.getState().signIn(stored.session,stored.user);return stored.session;
+ }
  const next=await api<AuthSession>('/auth/refresh',{method:'POST',body:{refreshToken:previous.refreshToken},public:true});
  const state=useAuthStore.getState();
  if(state.session?.refreshToken!==previous.refreshToken)throw new AppError('network','Session changed while reconnecting');
@@ -30,6 +48,7 @@ export async function refreshSession():Promise<AuthSession>{
       ||previous.rememberedUntil!==undefined&&Date.parse(next.rememberedUntil)>Date.parse(previous.rememberedUntil))
    ||Date.parse(next.expiresAt)<=Date.now()||!state.user)throw new AppError('network','Invalid session response');
  await state.signIn(next,state.user);return next;
+ });
  }catch(e){
   // A delayed refresh belonging to an old login must never sign out a newer login.
   if(e instanceof AppError&&e.code==='unauthorized'&&e.details?.status===401

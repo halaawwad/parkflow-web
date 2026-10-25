@@ -85,3 +85,21 @@ export const useAuthStore = create<AuthState>()((set) => ({
 }));
 
 export const currentUserId = (): string | undefined => useAuthStore.getState().user?.id;
+
+// Web: every open tab follows the stored session, so a refresh or sign-out in one tab
+// applies to all of them and no tab keeps using a refresh token that was already rotated.
+if (typeof window !== 'undefined' && typeof document !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener('storage', (event) => {
+    if (event.key !== STORAGE_KEYS.authSession) return;
+    if (!event.newValue) {
+      useAuthStore.setState({ session: undefined, user: undefined });
+      return;
+    }
+    try {
+      const parsed = JSON.parse(event.newValue) as Partial<PersistedAuth>;
+      if (parsed.session && parsed.user) useAuthStore.setState({ session: parsed.session, user: parsed.user });
+    } catch {
+      // Another tab wrote something unreadable; keep this tab's session.
+    }
+  });
+}

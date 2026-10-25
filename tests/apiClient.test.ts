@@ -194,6 +194,19 @@ describe('Render cold starts and session preservation', () => {
     expect(fetchMock.mock.calls.at(-1)?.[1].headers.Authorization).toBe('Bearer renewed-access');
   });
 
+  it('adopts a session another browser tab already rotated instead of reusing the old refresh token', async () => {
+    auth.setState({ session: { ...session(), expiresAt: new Date(Date.now() - 1000).toISOString() } });
+    const rotated = { ...session(), accessToken: 'other-tab-access', refreshToken: 'other-tab-refresh' };
+    storage.getItem.mockResolvedValue(JSON.stringify({ session: rotated, user }));
+    fetchMock.mockImplementation(async (url: string) => url.endsWith('/auth/refresh') ? denied() : response([]));
+    await client.api('/notifications');
+    // Sending the old token would look like theft to the server and end every session.
+    expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/auth/refresh'))).toHaveLength(0);
+    expect(auth.getState().session?.refreshToken).toBe('other-tab-refresh');
+    expect(fetchMock.mock.calls.at(-1)?.[1].headers.Authorization).toBe('Bearer other-tab-access');
+    expect(storage.removeItem).not.toHaveBeenCalled();
+  });
+
   it('signs out only when refresh returns a confirmed backend UNAUTHORIZED rejection', async () => {
     fetchMock.mockResolvedValue(denied());
     await expect(client.refreshSession()).rejects.toMatchObject({ code: 'unauthorized' });
