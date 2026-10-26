@@ -28,6 +28,7 @@ import { usePreferencesStore } from '@/store/preferencesStore';
 import { isAppError } from '@/utils/errors';
 import { WebAppShell } from '@/components/layout/WebAppShell';
 import { IntroSequence } from '@/components/brand/IntroSequence';
+import { IntroHandoff } from '@/components/brand/IntroHandoff';
 import { NotificationBanner } from '@/components/navigation/NotificationBanner';
 import { BackendConnectionNotice } from '@/components/navigation/BackendConnectionNotice';
 import { CrashCountdown } from '@/components/navigation/CrashCountdown';
@@ -163,7 +164,13 @@ function AppShell() {
 
   return (
     <WebAppShell>
-      {ready ? <RootNavigator /> : <View style={{ flex: 1, backgroundColor: colors.deep }} />}
+      {ready ? (
+        <IntroHandoff>
+          <RootNavigator />
+        </IntroHandoff>
+      ) : (
+        <View style={{ flex: 1, backgroundColor: colors.deep }} />
+      )}
       {ready ? <NotificationBanner /> : null}
       <BackendConnectionNotice />
       {ready ? <CrashCountdown /> : null}

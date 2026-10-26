@@ -7,6 +7,7 @@ import { Map, Receipt, Car, Wallet, User, HeartHandshake } from 'lucide-react-na
 
 import { AppText } from '@/components/ui/AppText';
 import { PressableScale } from '@/components/ui/PressableScale';
+import { Reveal } from '@/components/ui/Reveal';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, screenPadding } from '@/theme/spacing';
 import { radius } from '@/theme/radius';
@@ -152,6 +153,8 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
       }}
       pointerEvents="box-none"
     >
+      {/* Arrives with the app's first entrance only — never on tab changes. */}
+      <Reveal introOnly delay={140} offset={18} duration={480}>
       <View
         style={[
           {
@@ -188,6 +191,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
           );
         })}
       </View>
+      </Reveal>
     </View>
   );
 }
