@@ -40,8 +40,8 @@ beforeEach(async()=>{
  await redis.flushdb();
  await db.parkingOperator.create({data:{id:'op',name:'Test operator'}});
  await db.parkingZone.create({data:{id:'test-zone',operatorId:'op',code:'TEST-001',name:'Test parking',nameAr:'موقف تجريبي',city:'Ramallah',cityAr:'رام الله',latitude:31.9,longitude:35.2,kind:'garage',defaultMode:'start_stop',supportedModes:['start_stop','prepaid'],supportedEntryMethods:['manual','qr','zone_code','gps'],tariffs:{create:{id:'rate',name:'Test',hourlyRate:600,incrementMinutes:15,freeMinutes:5,minimumCharge:100,maxStayMinutes:180,validFrom:new Date('2020-01-01')}},operatingHours:{create:Array.from({length:7},(_,weekday)=>({weekday,opensAt:'00:00',closesAt:'00:00'}))}}});
- // Live reporting needs a reviewed checkpoint with at least one direction.
- await db.roadCheckpoint.create({data:{id:'cp',nameEn:'Test checkpoint',nameAr:'حاجز تجريبي',latitude:31.9,longitude:35.2,enabledForLiveReporting:true,reviewedAt:new Date(Date.now()-3600000),directions:[{id:'north',nameAr:'شمالًا',nameEn:'Northbound'}]}});
+ // Checkpoints have separate entrance and exit observations; approval is optional.
+ await db.roadCheckpoint.create({data:{id:'cp',nameEn:'Test checkpoint',nameAr:'حاجز تجريبي',latitude:31.9,longitude:35.2,enabledForLiveReporting:true,directions:[{id:'entrance',nameAr:'المدخل',nameEn:'Entrance'},{id:'exit',nameAr:'المخرج',nameEn:'Exit'}]}});
  driver=await login('599111111');other=await login('599222222');vehicleId=(await vehicles.create(driver.user.id,{plateNumber:'1234567',type:'private'})).id;
 });
 describe('authentication and authorization',()=>{
@@ -128,10 +128,10 @@ describe('payments, violations, permits and notifications',()=>{
  it('persists a notification even with no push provider',async()=>{await atomic(tx=>notify(tx,driver.user.id,'system','Hello','?????','Test','??????'));expect(await db.notification.count({where:{userId:driver.user.id}})).toBe(1);expect(await db.outboxEvent.count({where:{topic:'notification.created'}})).toBe(1);});
  it('rejects MIME spoofing',()=>{expect(()=>validateFile(Buffer.from('not a jpeg'),'image/jpeg')).toThrow();});
 });
-/** A checkpoint observation as the app sends it: direction, time, and either a nearby fix or an explicit "unverified". */
-const observation=(verified=false)=>({directionId:'north',observedAt:new Date().toISOString(),unverified:!verified,
+/** A checkpoint observation as the app sends it: entrance/exit, time, and location evidence. */
+const observation=(verified=false,directionId:'entrance'|'exit'='entrance')=>({directionId,observedAt:new Date().toISOString(),unverified:!verified,
  ...(verified?{location:{latitude:31.9,longitude:35.2,accuracy:10,capturedAt:new Date().toISOString()}}:{})});
-const reportCheckpoint=(userId:string,status:'open'|'closed',verified=false)=>roads.reportRoad(userId,'cp',status,observation(verified));
+const reportCheckpoint=(userId:string,status:'open'|'closed',verified=false,directionId:'entrance'|'exit'='entrance')=>roads.reportRoad(userId,'cp',status,observation(verified,directionId));
 describe('reports, trust and routing',()=>{
  it('uses deterministic road-report confidence thresholds',()=>{expect(calculateConfidence(0,0,false)).toEqual({confidenceScore:0.35,status:'unverified'});expect(calculateConfidence(2,0,false)).toEqual({confidenceScore:0.6499999999999999,status:'confirmed'});expect(calculateConfidence(0,2,false)).toMatchObject({confidenceScore:0,status:'disputed'});expect(calculateConfidence(2,0,true)).toEqual({confidenceScore:0,status:'expired'});});
  it('persists, bounds, votes, and blocks duplicate road-report votes',async()=>{const created=await roadReports.create(driver.user.id,{type:'accident',latitude:31.9,longitude:35.2,severity:'high',description:'Test event'});expect((await roadReports.active(other.user.id,{north:32,south:31,east:36,west:35}))[0]?.id).toBe(created.report.id);const voted=await roadReports.vote(other.user.id,created.report.id,'still_there');expect(voted).toMatchObject({confirmationCount:1,viewerVote:'still_there',canVote:false});await expect(roadReports.vote(other.user.id,created.report.id,'not_there')).rejects.toMatchObject({code:'ALREADY_VOTED'});});
@@ -139,7 +139,20 @@ describe('reports, trust and routing',()=>{
  it('rejects invalid report coordinates at the API boundary',async()=>{const response=await request(app).post('/api/v1/road-reports').auth(driver.session.accessToken,{type:'bearer'}).send({type:'accident',latitude:100,longitude:35.2});expect(response.status).toBe(400);});
  it('uses freshness weights and flags assumed status',()=>{const now=Date.now();expect(aggregate([],90,360,now).assumed).toBe(true);const a=aggregate([{status:'closed',reportedAt:new Date(now-60*60000),userId:'a'},{status:'open',reportedAt:new Date(now),userId:'b'}],90,360,now);expect(a.status).toBe('open');expect(aggregate([{status:'closed',reportedAt:new Date(now-400*60000)}],90,360,now).assumed).toBe(true);});
  it('keeps parking reports on the shorter freshness window',()=>{const now=Date.now();expect(aggregate([{status:'full',reportedAt:new Date(now-130*60000)}],30,120,now).status).toBeUndefined();});
- it('aggregates reports and awards pending points only',async()=>{const r=await reportCheckpoint(driver.user.id,'closed');expect(r.points?.state).toBe('pending');expect((await roads.checkpoints())[0]).toMatchObject({status:'closed',assumed:true});expect((await computeTrust(driver.user.id)).pendingPoints).toBe(5);});
+ it('aggregates reports and awards pending points only',async()=>{
+  const r=await reportCheckpoint(driver.user.id,'closed');
+  expect(r.points?.state).toBe('pending');
+  expect((await roads.checkpoints())[0]).toMatchObject({status:'unknown',assumed:true,directions:[
+   {id:'entrance',status:'closed',confidence:'unconfirmed',reportCount:1},
+   {id:'exit',status:'unknown',reportCount:0},
+  ]});
+  await reportCheckpoint(other.user.id,'open',false,'exit');
+  expect((await roads.checkpoints())[0]).toMatchObject({status:'unknown',assumed:true,directions:[
+   {id:'entrance',status:'closed',reportCount:1},
+   {id:'exit',status:'open',confidence:'unconfirmed',reportCount:1},
+  ]});
+  expect((await computeTrust(driver.user.id)).pendingPoints).toBe(5);
+ });
  it('verifies uncontradicted points after the confirmation window',async()=>{await reportCheckpoint(driver.user.id,'open');await roads.verifyPoints(new Date(Date.now()+16*60000));expect((await db.pointsEntry.findFirst())?.state).toBe('verified');});
  it('revokes points for a contradictory report from another driver',async()=>{await reportCheckpoint(driver.user.id,'open');await reportCheckpoint(other.user.id,'closed');await roads.verifyPoints(new Date(Date.now()+16*60000));expect((await db.pointsEntry.findFirst({where:{userId:driver.user.id}}))?.state).toBe('revoked');});
  it('prevents report spam and repeated rewards',async()=>{await reportCheckpoint(driver.user.id,'open');await expect(reportCheckpoint(driver.user.id,'closed')).rejects.toMatchObject({code:'REPORT_COOLDOWN'});await db.checkpointReport.updateMany({data:{reportedAt:new Date(Date.now()-61000)}});const result=await reportCheckpoint(driver.user.id,'closed');expect(result.points).toBeUndefined();});
@@ -153,7 +166,20 @@ describe('reports, trust and routing',()=>{
  it('records crash detections with the number only when a call was made',async()=>{const saved=env.EMERGENCY_CALL_NUMBER;try{env.EMERGENCY_CALL_NUMBER='112';const called=await request(app).post('/api/v1/emergency/crash-events').auth(driver.session.accessToken,{type:'bearer'}).send({detectedAt:new Date().toISOString(),latitude:31.9,longitude:35.2,speedKmh:54,peakG:6.2,rotationDeg:120,outcome:'called'});expect(called.status).toBe(200);expect(called.body).toMatchObject({outcome:'called',calledNumber:'112'});const cancelled=await emergency.recordCrash(driver.user.id,{detectedAt:new Date().toISOString(),peakG:4.5,outcome:'cancelled'});expect(cancelled.calledNumber).toBeNull();expect(await emergency.recentCrashes(other.user.id)).toHaveLength(0);expect((await request(app).post('/api/v1/emergency/crash-events').auth(driver.session.accessToken,{type:'bearer'}).send({detectedAt:'yesterday',peakG:5,outcome:'called'})).status).toBe(400);}finally{env.EMERGENCY_CALL_NUMBER=saved;}});
  it('aggregates parking availability on the backend',async()=>{await roads.reportZone(driver.user.id,'test-zone','full');const response=await request(app).get('/api/v1/parking/zones/test-zone').auth(driver.session.accessToken,{type:'bearer'});expect(response.body.availability).toBe('full');expect(response.body.crowd.reportCount).toBe(1);});
  it('calculates trust tiers, caps paid sessions and deducts unpaid fines',()=>{expect(trustScore({phone:true,vehicles:1,paid:3,reports:0,reportPoints:0,unpaid:0}).discountPercent).toBe(5);expect(trustScore({phone:true,vehicles:1,paid:100,reports:0,reportPoints:0,unpaid:0}).score).toBe(370);expect(trustScore({phone:true,vehicles:1,paid:0,reports:0,reportPoints:0,unpaid:3}).score).toBe(0);});
- it('ranks route alternatives with checkpoint penalties',async()=>{await reportCheckpoint(driver.user.id,'closed',true);await reportCheckpoint(other.user.id,'closed',true);vi.stubGlobal('fetch',vi.fn().mockResolvedValue({json:async()=>({code:'Ok',routes:[{distance:1000,duration:100,geometry:{coordinates:[[35.19,31.9],[35.21,31.9]]}},{distance:2000,duration:200,geometry:{coordinates:[[35.19,32],[35.21,32]]}}]})}));const r=await routingService.getRoute({latitude:31.9,longitude:35.19},{latitude:31.9,longitude:35.21});expect(r.distanceMeters).toBe(2000);expect(r.rejected[0]?.blockedBy?.status).toBe('closed');});
+ it('ranks route alternatives with checkpoint penalties',async()=>{
+  await reportCheckpoint(driver.user.id,'closed',true);
+  await reportCheckpoint(other.user.id,'closed',true);
+  const third=await login('599333333'),fourth=await login('599444444');
+  await reportCheckpoint(third.user.id,'closed',true,'exit');
+  await reportCheckpoint(fourth.user.id,'closed',true,'exit');
+  expect((await roads.checkpoints())[0]).toMatchObject({status:'closed',assumed:false,directions:[
+   {id:'entrance',status:'closed',confidence:'confirmed'},
+   {id:'exit',status:'closed',confidence:'confirmed'},
+  ]});
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue({json:async()=>({code:'Ok',routes:[{distance:1000,duration:100,geometry:{coordinates:[[35.19,31.9],[35.21,31.9]]}},{distance:2000,duration:200,geometry:{coordinates:[[35.19,32],[35.21,32]]}}]})}));
+  const r=await routingService.getRoute({latitude:31.9,longitude:35.19},{latitude:31.9,longitude:35.21});
+  expect(r.distanceMeters).toBe(2000);expect(r.rejected[0]?.blockedBy?.status).toBe('closed');
+ });
  it('returns OSRM turn steps for navigation, honouring the heading and intermediate stops',async()=>{
   const step=(type:string,modifier:string|undefined,location:[number,number],name:string)=>({distance:100,duration:10,name,geometry:{coordinates:[location,[location[0]+0.001,location[1]]]},maneuver:{type,modifier,location,bearing_before:0,bearing_after:90}});
   const fetchMock=vi.fn().mockResolvedValue({json:async()=>({code:'Ok',routes:[{distance:300,duration:30,geometry:{coordinates:[[35.19,31.9],[35.2,31.9],[35.21,31.9]]},legs:[{steps:[step('depart',undefined,[35.19,31.9],'شارع الإرسال'),step('arrive','right',[35.2,31.9],'')]},{steps:[step('depart',undefined,[35.2,31.9],''),step('turn','left',[35.205,31.9],'Al-Quds'),step('arrive','left',[35.21,31.9],'')]}]}]})});
