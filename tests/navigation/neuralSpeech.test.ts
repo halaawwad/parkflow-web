@@ -165,4 +165,19 @@ describe('natural navigation voice', () => {
     expect(unavailable).toBe(1);
     expect(device).toEqual(['Turn right.', 'Turn left.', 'Arrived.']);
   });
+
+  it('tries the natural voice again on a new trip after giving up', async () => {
+    let attempts = 0;
+    const quota = new Error('VOICE_RATE_LIMITED');
+    const { engine } = setup({ synthesize: () => (attempts++, Promise.reject(quota)), permanent: (error) => error === quota });
+    const callbacks = { onDone: () => undefined, onStopped: () => undefined, onError: () => undefined };
+    engine.speak('Turn right.', callbacks);
+    await flush();
+    expect(engine.available).toBe(false);
+    engine.retry();
+    expect(engine.available).toBe(true);
+    engine.speak('Turn left.', callbacks);
+    await flush();
+    expect(attempts).toBe(2);
+  });
 });

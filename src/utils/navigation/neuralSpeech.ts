@@ -31,9 +31,9 @@ export interface NeuralSpeechOptions {
   /** Called once when the engine gives up on natural audio for the session. */
   onUnavailable?: () => void;
   /** Longest wait for natural audio before an urgent prompt uses the device voice. */
-  waitMs?: number;
+  waitMs?: number | (() => number);
   /** Same for routine prompts, which are spoken well ahead of the maneuver. */
-  routineWaitMs?: number;
+  routineWaitMs?: number | (() => number);
   cacheLimit?: number;
   timers?: {
     setTimeout: (fn: () => void, ms: number) => unknown;
@@ -46,12 +46,16 @@ export interface NeuralSpeechEngine extends SpeechEngine {
   prefetch(texts: string[]): void;
   /** False once the service has been given up on for this session. */
   readonly available: boolean;
+  /** A new trip: try the natural voice again after an earlier give-up (quotas recover). */
+  retry(): void;
 }
 
 const BLOCKED = /notallowed|not-allowed/i;
 const MAX_CONSECUTIVE_FAILURES = 3;
 /** Prefetch politely: a couple of requests at a time. */
 const PREFETCH_CONCURRENCY = 2;
+
+const resolveMs = (value: number | (() => number)) => (typeof value === 'function' ? value() : value);
 
 const errorText = (error: unknown) =>
   typeof error === 'object' && error !== null
@@ -138,6 +142,11 @@ export function createNeuralSpeechEngine(options: NeuralSpeechOptions): NeuralSp
       return !disabled;
     },
 
+    retry() {
+      disabled = false;
+      failures = 0;
+    },
+
     prefetch(texts) {
       if (disabled) return;
       const queue = [...new Set(texts)].filter((text) => text && !cache.has(text) && !pending.has(text));
@@ -167,7 +176,7 @@ export function createNeuralSpeechEngine(options: NeuralSpeechOptions): NeuralSp
         if (settled) return;
         settled = true;
         useFallback();
-      }, speakOptions?.urgent === false ? routineWaitMs : waitMs);
+      }, resolveMs(speakOptions?.urgent === false ? routineWaitMs : waitMs));
       void load(text, 'now').then((source) => {
         if (settled || mine !== token) return;
         settled = true;

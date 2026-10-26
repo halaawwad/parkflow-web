@@ -327,6 +327,8 @@ export function NavigationOverlay({
     if (state.status === 'rerouting') return <Banner tone="info" icon={null} text={t('nav.rerouting')} busy />;
     if (state.offline) return <Banner tone="warning" icon={<CloudOff size={18} color={colors.warningText} />} text={t('nav.offline')} />;
     if (nav.voiceStatus.blocked && !nav.muted) return <Banner tone="info" icon={<Volume2 size={18} color={colors.infoText} />} text={t('nav.voiceBlocked')} onPress={nav.repeat} />;
+    // Without a natural voice anywhere the app stays quiet rather than sound robotic, and says so for the whole trip.
+    if (nav.naturalVoiceLost && !nav.voice.natural && Platform.OS === 'web' && !nav.muted) return <Banner tone="info" icon={<VolumeX size={18} color={colors.infoText} />} text={t('nav.naturalVoiceSilent')} />;
     if (nav.naturalVoiceNotice && !nav.muted) return <Banner tone="info" icon={<Volume2 size={18} color={colors.infoText} />} text={t('nav.naturalVoiceUnavailable')} />;
     if (!nav.voice.available && !nav.naturalVoice && !nav.muted) return <Banner tone="info" icon={<VolumeX size={18} color={colors.infoText} />} text={t('nav.voiceMissing')} />;
     return null;
