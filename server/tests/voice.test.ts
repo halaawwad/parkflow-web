@@ -1,10 +1,15 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { env } from '../src/config/env';
 import { clearVoiceCache, pcmToWav, speak } from '../src/modules/voice/service';
 
 const originalKey = env.GEMINI_API_KEY;
+const originalVoiceKey = env.GEMINI_TTS_API_KEY;
+beforeEach(() => {
+  env.GEMINI_TTS_API_KEY = undefined;
+});
 afterEach(() => {
   env.GEMINI_API_KEY = originalKey;
+  env.GEMINI_TTS_API_KEY = originalVoiceKey;
   clearVoiceCache();
   vi.unstubAllGlobals();
 });
@@ -48,6 +53,46 @@ describe('navigation voice', () => {
     const wav = Buffer.from(first.audio, 'base64');
     expect(wav.readUInt32LE(24)).toBe(16000);
     expect(second).toBe(first);
+  });
+
+  it('uses the dedicated voice key when one is set', async () => {
+    env.GEMINI_API_KEY = 'shared-key';
+    env.GEMINI_TTS_API_KEY = 'voice-key';
+    const fetchMock = vi.fn().mockResolvedValue(geminiAudio());
+    vi.stubGlobal('fetch', fetchMock);
+    await speak('Turn left.', 'en');
+    expect(fetchMock.mock.calls[0]![1].headers['x-goog-api-key']).toBe('voice-key');
+  });
+
+  it('works with only the dedicated voice key', async () => {
+    env.GEMINI_API_KEY = undefined;
+    env.GEMINI_TTS_API_KEY = 'voice-key';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(geminiAudio()));
+    await expect(speak('Turn left.', 'en')).resolves.toMatchObject({ mimeType: 'audio/wav' });
+  });
+
+  it('passes WAV audio from Gemini 3.8 TTS through without a second header', async () => {
+    env.GEMINI_API_KEY = 'test-key';
+    const wav = pcmToWav(pcm, 24000);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'audio/wav', data: wav.toString('base64') } }] } }] }),
+      }),
+    );
+    const result = await speak('Turn right.', 'en');
+    expect(result.mimeType).toBe('audio/wav');
+    expect(Buffer.from(result.audio, 'base64').equals(wav)).toBe(true);
+  });
+
+  it('recognises a WAV file by its header even under another mime type', async () => {
+    env.GEMINI_API_KEY = 'test-key';
+    const wav = pcmToWav(pcm, 24000);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ...geminiAudio(), json: async () => ({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'audio/L16;rate=24000', data: wav.toString('base64') } }] } }] }) }));
+    const result = await speak('Turn right.', 'en');
+    expect(Buffer.from(result.audio, 'base64').equals(wav)).toBe(true);
   });
 
   it('shares one provider call between simultaneous requests for the same sentence', async () => {

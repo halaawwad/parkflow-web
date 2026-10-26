@@ -67,6 +67,12 @@ services:
         sync: false
       - key: S3_SECRET_KEY
         sync: false
+      # Gemini: dashboard warning check and AI features (docs/GEMINI_SETUP.md).
+      - key: GEMINI_API_KEY
+        sync: false
+      # Natural navigation voice. Optional; falls back to GEMINI_API_KEY when empty.
+      - key: GEMINI_TTS_API_KEY
+        sync: false
 
   # Render Key Value (Valkey/Redis). Free plan keeps data in memory only.
   - type: keyvalue

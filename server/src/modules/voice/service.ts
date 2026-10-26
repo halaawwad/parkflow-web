@@ -8,8 +8,8 @@ import { ApiError } from '../../utils/errors';
  * browser exposes (e.g. Windows' Arabic "Naayf") are robotic; Gemini's are
  * not. The key stays on the server.
  *
- * Gemini returns raw 16-bit PCM; it is wrapped in a WAV header so every
- * browser can play it directly. Results are cached in memory: navigation
+ * Gemini returns a WAV file (3.8 TTS) or raw 16-bit PCM (older models, which
+ * is wrapped in a WAV header) so every browser can play it directly. Results are cached in memory: navigation
  * repeats the same short sentences constantly, so most requests never reach
  * the provider.
  */
@@ -65,6 +65,9 @@ export function pcmToWav(pcm: Buffer, sampleRate: number): Buffer {
   return Buffer.concat([header, pcm]);
 }
 
+/** A dedicated voice key keeps text-to-speech on its own Gemini project and quota. */
+const apiKey = () => env.GEMINI_TTS_API_KEY || env.GEMINI_API_KEY;
+
 const rateOf = (mimeType: string) => Number(/rate=(\d+)/.exec(mimeType)?.[1] ?? 24000);
 
 async function synthesize(text: string, locale: VoiceLocale): Promise<SpokenAudio> {
@@ -72,7 +75,7 @@ async function synthesize(text: string, locale: VoiceLocale): Promise<SpokenAudi
   try {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_TTS_MODEL}:generateContent`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY! },
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey()! },
       signal: AbortSignal.timeout(TIMEOUT_MS),
       body: JSON.stringify({
         contents: [{ role: 'user', parts: [{ text: `${STYLE[locale]}\n${text}` }] }],
@@ -97,12 +100,17 @@ async function synthesize(text: string, locale: VoiceLocale): Promise<SpokenAudi
   const parsed = envelopeSchema.safeParse(raw);
   const audio = parsed.success ? parsed.data.candidates[0]!.content.parts.find((part) => part.inlineData)?.inlineData : undefined;
   if (!audio) throw new ApiError(502, 'VOICE_MALFORMED', 'The navigation voice returned no audio');
-  const pcm = Buffer.from(audio.data, 'base64');
+  // Gemini 3.8 TTS already returns a WAV file; older models return headerless PCM.
+  const bytes = Buffer.from(audio.data, 'base64');
+  if (/^audio\/(x-)?wav/i.test(audio.mimeType) || bytes.subarray(0, 4).toString('latin1') === 'RIFF') {
+    return { mimeType: 'audio/wav', audio: bytes.toString('base64') };
+  }
+  const pcm = bytes;
   return { mimeType: 'audio/wav', audio: pcmToWav(pcm, rateOf(audio.mimeType)).toString('base64') };
 }
 
 export async function speak(text: string, locale: VoiceLocale): Promise<SpokenAudio> {
-  if (!env.GEMINI_API_KEY) throw new ApiError(503, 'VOICE_NOT_CONFIGURED', 'The navigation voice is not configured');
+  if (!apiKey()) throw new ApiError(503, 'VOICE_NOT_CONFIGURED', 'The navigation voice is not configured');
   const key = createHash('sha256').update(`${env.GEMINI_TTS_MODEL}|${env.GEMINI_TTS_VOICE}|${locale}|${text}`).digest('hex');
 
   const hit = cache.get(key);
