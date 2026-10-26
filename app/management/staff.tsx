@@ -9,20 +9,21 @@ import { useAuthStore } from '@/store/authStore';
 import { useLocale } from '@/hooks/useLocale';
 import { spacing } from '@/theme/spacing';
 import { errorMessage } from '@/utils/errors';
+import { ChoiceList } from '@/components/management/ChoiceList';
 
 export default function StaffManagement(){
   const {locale}=useLocale();const ar=locale==='ar';const access=useManagementAccess();const user=useAuthStore(s=>s.user);
   const organizations=useQuery({queryKey:['management','owned-organizations',user?.id],queryFn:service.ownedOrganizations,enabled:Boolean(access.data?.canManageStaff)});
   const [selected,setSelected]=useState('');
   const operatorId=organizations.data?.some(o=>o.id===selected)?selected:organizations.data?.[0]?.id;
-  if(access.isPending)return <Screen><SkeletonGroup count={2}/></Screen>;
-  if(access.error)return <Screen><ErrorState error={access.error} onRetry={()=>void access.refetch()}/></Screen>;
-  if(!access.data?.canManageStaff)return <Screen><AppText>{ar?'إدارة الموظفين متاحة للمالك والأدمن فقط.':'Only owners and admins can manage staff.'}</AppText></Screen>;
-  return <Screen contentContainerStyle={{gap:spacing.lg}}>
+  if(access.isPending)return <Screen safeTop={false}><SkeletonGroup count={2}/></Screen>;
+  if(access.error)return <Screen safeTop={false}><ErrorState error={access.error} onRetry={()=>void access.refetch()}/></Screen>;
+  if(!access.data?.canManageStaff)return <Screen safeTop={false}><AppText>{ar?'إدارة الموظفين متاحة للمالك والأدمن فقط.':'Only owners and admins can manage staff.'}</AppText></Screen>;
+  return <Screen safeTop={false} contentContainerStyle={{gap:spacing.lg}}>
     <AppHeader title={ar?'إدارة الموظفين':'Staff management'}/>
-    <AppText color="textSecondary">{ar?'الصلاحيات تشمل مواقف المؤسسة المختارة فقط. الموظف لا يصبح مالكًا ولا يمكنه إدارة الموظفين.':'Permissions apply only to the selected organization’s zones. Staff do not become owners and cannot manage other staff.'}</AppText>
+    <AppText variant="bodySm" color="textSecondary">{ar?'الصلاحيات تشمل مواقف المؤسسة المختارة فقط. الموظف لا يصبح مالكًا ولا يمكنه إدارة الموظفين.':'Permissions apply only to the selected organization’s zones. Staff do not become owners and cannot manage other staff.'}</AppText>
     {organizations.isPending?<SkeletonGroup count={2}/>:organizations.error?<ErrorState error={organizations.error} onRetry={()=>void organizations.refetch()}/>:<>
-      <View style={{gap:spacing.sm}}>{organizations.data.map(o=><AppButton key={o.id} label={o.name} variant={operatorId===o.id?'secondary':'ghost'} onPress={()=>setSelected(o.id)}/>)}</View>
+      <ChoiceList items={organizations.data.map(o=>({id:o.id,label:o.name}))} selectedId={operatorId} onSelect={setSelected}/>
       {operatorId?<StaffEditor key={`${user?.id}:${operatorId}`} operatorId={operatorId}/>:<EmptyState title={ar?'لا توجد مؤسسات مرتبطة بحسابك.':'No owned organizations.'}/>}
     </>}
   </Screen>;

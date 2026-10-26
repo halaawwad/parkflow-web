@@ -115,7 +115,8 @@ function Scanner({ zone }: { zone: GateZone }) {
 }
 
 function RulesCard({ zone }: { zone: GateZone }) {
-  const { t } = useLocale();
+  const { t, alignStart } = useLocale();
+  const { colors } = useTheme();
   const save = useSaveRules();
   const [open, setOpen] = useState(false);
   const [grace, setGrace] = useState(String(zone.overstayGraceMinutes));
@@ -153,7 +154,8 @@ function RulesCard({ zone }: { zone: GateZone }) {
             onPress={() => save.mutate({ zoneId: zone.id, rules }, { onSuccess: () => { haptics.success(); setOpen(false); } })} />
         </>
       ) : (
-        <AppButton label={t('common.edit')} size="sm" variant="secondary" onPress={() => setOpen(true)} />
+        <AppButton label={t('common.edit')} size="sm" variant="ghost" fullWidth={false} onPress={() => setOpen(true)}
+          style={{ alignSelf: alignStart, paddingHorizontal: spacing.lg, backgroundColor: colors.track }} />
       )}
     </Card>
   );

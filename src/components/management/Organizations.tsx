@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useLocale } from '@/hooks/useLocale';
 import { spacing } from '@/theme/spacing';
 import { errorMessage } from '@/utils/errors';
+import { ChoiceList } from './ChoiceList';
 
 export function Organizations(){
   const user=useAuthStore(s=>s.user);const {locale}=useLocale();const ar=locale==='ar';const client=useQueryClient();
@@ -41,7 +42,7 @@ export function Organizations(){
         {operators.error?<ErrorState error={operators.error} onRetry={()=>void operators.refetch()}/>:null}
         {tab!=='organization'?<>
           <AppText variant="label">{ar?'اختر المؤسسة':'Select organization'}</AppText>
-          {(operators.data??[]).map(op=><AppButton key={op.id} label={op.name} variant={operatorId===op.id?'secondary':'ghost'} onPress={()=>setOperatorId(op.id)} disabled={mutation.isPending}/>)}
+          <ChoiceList items={(operators.data??[]).map(op=>({id:op.id,label:op.name}))} selectedId={operatorId} onSelect={setOperatorId} disabled={mutation.isPending}/>
           {operators.isPending?<AppText>{ar?'جارٍ التحميل…':'Loading…'}</AppText>:!operators.data?.length?<AppText>{ar?'أنشئ مؤسسة أولًا.':'Create an organization first.'}</AppText>:null}
         </>:null}
         {tab==='assignment'?<>
