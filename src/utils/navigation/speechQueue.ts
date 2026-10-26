@@ -16,8 +16,11 @@ export interface SpeechEngine {
   speak(
     text: string,
     callbacks: { onDone: () => void; onStopped: () => void; onError: (error: unknown) => void },
-    /** Urgent prompts ("Turn right") must start at once; routine ones may wait briefly for better audio. */
-    options?: { urgent?: boolean },
+    /**
+     * Urgent prompts ("Turn right") must start at once; routine ones may wait briefly for better audio.
+     * Immediate ones (obstacle warnings) never wait for audio that is not ready.
+     */
+    options?: { urgent?: boolean; immediate?: boolean },
   ): void;
   stop(): void;
   /** Whether audio is still playing, when the platform can say synchronously. Lets the watchdog wait for slow voices. */
@@ -38,6 +41,8 @@ export interface SpeechRequest {
   force?: boolean;
   /** Checked before a waiting prompt plays; guidance for a turn already passed is dropped. */
   isCurrent?: () => boolean;
+  /** Play with whatever voice is ready now (obstacle warnings: late is useless). */
+  immediate?: boolean;
 }
 
 export interface SpeechQueueStatus {
@@ -183,7 +188,7 @@ export class SpeechQueue {
           this.setStatus({ errors: this.status.errors + 1, blocked: this.status.blocked || isBlockedError(error) });
           this.finish(token);
         },
-      }, { urgent: rankOf(request) >= RANK.high });
+      }, { urgent: rankOf(request) >= RANK.high, immediate: request.immediate });
     } catch (error) {
       this.setStatus({ errors: this.status.errors + 1, blocked: isBlockedError(error) });
       this.finish(token);

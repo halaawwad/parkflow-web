@@ -164,9 +164,10 @@ export function createNeuralSpeechEngine(options: NeuralSpeechOptions): NeuralSp
       const useFallback = () => {
         if (mine !== token) return;
         clearWait();
-        fallback.speak(text, callbacks);
+        fallback.speak(text, callbacks, speakOptions);
       };
-      if (disabled && !cache.has(text)) {
+      // An obstacle warning cannot wait for the network: the device voice says it now.
+      if ((disabled || speakOptions?.immediate) && !cache.has(text)) {
         useFallback();
         return;
       }
@@ -182,7 +183,7 @@ export function createNeuralSpeechEngine(options: NeuralSpeechOptions): NeuralSp
         settled = true;
         clearWait();
         if (!source) {
-          fallback.speak(text, callbacks);
+          fallback.speak(text, callbacks, speakOptions);
           return;
         }
         player.play(source, {
@@ -194,7 +195,7 @@ export function createNeuralSpeechEngine(options: NeuralSpeechOptions): NeuralSp
             // A browser autoplay block is reported (the queue shows "tap to enable");
             // anything else falls back to the device voice for this sentence.
             if (BLOCKED.test(errorText(error))) callbacks.onError({ error: 'not-allowed' });
-            else fallback.speak(text, callbacks);
+            else fallback.speak(text, callbacks, speakOptions);
           },
         });
       });

@@ -1,57 +1,154 @@
 import type { GuidanceLocale } from '@/utils/navigation/instructions';
-import type { ObstacleAssessment, Proximity } from './tracker';
+import { dangerOf, type Direction, type ObstacleAssessment, type Proximity } from './tracker';
 import type { Unreliability } from './quality';
 
 /**
- * When to speak about obstacles. Few, short warnings: a warning for every
- * visible object would drown out the route. Nothing here ever says the way is
- * clear or suggests a direction to step in — the camera cannot see enough to
- * promise that (walls, holes, curbs and stairs are not detected).
+ * When and how to speak about obstacles: the most dangerous one first, said
+ * again only when it is new, gets more dangerous, or stays relevant long
+ * enough to need a reminder. A warning for every visible object would drown
+ * out the route and the street. Nothing here ever says the way is clear or
+ * suggests where to step — the camera cannot see enough to promise that
+ * (walls, poles, holes, curbs and stairs are not detected).
  */
 
 export const WARNING_TIMING = {
-  /** A close obstacle is repeated at most this often while it stays close. */
-  nearCooldownMs: 4_000,
-  /** Gap between "obstacle ahead" warnings. */
-  aheadCooldownMs: 8_000,
-  /** The same tracked obstacle is not announced as "ahead" again within this. */
-  trackRepeatMs: 20_000,
+  /** Least time between two obstacle announcements, unless the danger rises. */
+  minGapMs: 1_500,
+  /** A still-relevant obstacle is mentioned again after this long at the same level. */
+  repeatMs: { 'very-close': 3_000, near: 5_000, ahead: 12_000 } as Record<Proximity, number>,
+  /** An obstacle not seen for this long is forgotten; if it comes back it is new again. */
+  forgetMs: 4_000,
 };
 export type WarningTiming = typeof WARNING_TIMING;
 
+export type AnnouncementPriority = 'normal' | 'high' | 'urgent';
+
+export interface ObstacleAnnouncement {
+  primary: ObstacleAssessment;
+  /** One other obstacle in a different direction, mentioned after the main one. */
+  secondary?: ObstacleAssessment;
+  /** Close and in the path cuts in over everything; the rest waits behind a turn instruction. */
+  priority: Extract<AnnouncementPriority, 'high' | 'urgent'>;
+}
+
 export class WarningPolicy {
-  private lastNearAt = Number.NEGATIVE_INFINITY;
-  private lastAheadAt = Number.NEGATIVE_INFINITY;
-  private warnedAt = new Map<number, number>();
+  /** Per obstacle: the danger last announced (or the highest since), and when. */
+  private announced = new Map<number, { danger: number; at: number; seenAt: number }>();
+  private lastAt = Number.NEGATIVE_INFINITY;
+  private lastDanger = 0;
 
   constructor(private readonly timing: WarningTiming = WARNING_TIMING) {}
 
-  /** The warning to speak for this frame, if any. */
-  decide(assessments: ObstacleAssessment[], now: number): Proximity | undefined {
-    for (const [id, at] of this.warnedAt) if (now - at > this.timing.trackRepeatMs) this.warnedAt.delete(id);
-    const near = assessments.filter((a) => a.proximity === 'near');
-    if (near.length) {
-      // Inside the cooldown stay quiet rather than downgrade a close obstacle to "ahead".
-      if (now - this.lastNearAt < this.timing.nearCooldownMs) return undefined;
-      this.lastNearAt = now;
-      this.lastAheadAt = now;
-      for (const a of assessments) this.warnedAt.set(a.trackId, now);
-      return 'near';
+  /** The announcement for this frame, if one is due. */
+  decide(assessments: ObstacleAssessment[], now: number): ObstacleAnnouncement | undefined {
+    // Forget first: an obstacle that left and came back is news again.
+    for (const [id, memory] of this.announced) if (now - memory.seenAt > this.timing.forgetMs) this.announced.delete(id);
+    for (const a of assessments) {
+      const memory = this.announced.get(a.trackId);
+      if (memory) memory.seenAt = now;
     }
-    const fresh = assessments.filter((a) => !this.warnedAt.has(a.trackId));
-    if (!fresh.length || now - this.lastAheadAt < this.timing.aheadCooldownMs) return undefined;
-    this.lastAheadAt = now;
-    for (const a of assessments) this.warnedAt.set(a.trackId, now);
-    return 'ahead';
+    if (!assessments.length) return undefined;
+
+    const sinceLast = now - this.lastAt;
+    const due = (a: ObstacleAssessment) => {
+      const memory = this.announced.get(a.trackId);
+      const danger = dangerOf(a);
+      return memory
+        // The same obstacle: speak when it got more dangerous, or as a reminder.
+        ? danger > memory.danger || (now - memory.at >= this.timing.repeatMs[a.proximity] && sinceLast >= this.timing.minGapMs)
+        // A new obstacle: promptly, unless something at least as dangerous was just said.
+        : sinceLast >= this.timing.minGapMs || danger > this.lastDanger;
+    };
+    const sorted = [...assessments].sort((x, y) => dangerOf(y) - dangerOf(x));
+    // While something is very close, talk about nothing else.
+    const candidates = sorted[0]!.proximity === 'very-close' ? [sorted[0]!] : sorted;
+    const primary = candidates.find(due);
+    if (!primary) return undefined;
+    const danger = dangerOf(primary);
+
+    const priority = primary.proximity === 'very-close' || (primary.proximity === 'near' && primary.direction === 'ahead') ? 'urgent' : 'high';
+    // An urgent warning stays as short as possible.
+    const secondary = priority === 'urgent' ? undefined : assessments
+      .filter((a) => a.trackId !== primary.trackId && a.direction !== primary.direction && !this.recentlyAnnounced(a, now))
+      .sort((a, b) => dangerOf(b) - dangerOf(a))[0];
+
+    for (const a of secondary ? [primary, secondary] : [primary]) {
+      this.announced.set(a.trackId, { danger: dangerOf(a), at: now, seenAt: now });
+    }
+    this.lastAt = now;
+    this.lastDanger = danger;
+    return { primary, secondary, priority };
+  }
+
+  private recentlyAnnounced(a: ObstacleAssessment, now: number) {
+    const memory = this.announced.get(a.trackId);
+    return Boolean(memory && dangerOf(a) <= memory.danger && now - memory.at < this.timing.repeatMs[a.proximity]);
   }
 
   reset(): void {
-    this.lastNearAt = Number.NEGATIVE_INFINITY;
-    this.lastAheadAt = Number.NEGATIVE_INFINITY;
-    this.warnedAt.clear();
+    this.announced.clear();
+    this.lastAt = Number.NEGATIVE_INFINITY;
+    this.lastDanger = 0;
   }
 }
 
+type Gender = 'm' | 'f';
+const NAMES: Record<string, { ar: string; g: Gender; en: string }> = {
+  person: { ar: 'شخص', g: 'm', en: 'person' },
+  bicycle: { ar: 'دراجة', g: 'f', en: 'bicycle' },
+  motorcycle: { ar: 'دراجة نارية', g: 'f', en: 'motorcycle' },
+  car: { ar: 'سيارة', g: 'f', en: 'car' },
+  bus: { ar: 'حافلة', g: 'f', en: 'bus' },
+  truck: { ar: 'شاحنة', g: 'f', en: 'truck' },
+  bench: { ar: 'مقعد', g: 'm', en: 'bench' },
+  chair: { ar: 'كرسي', g: 'm', en: 'chair' },
+  'dining table': { ar: 'طاولة', g: 'f', en: 'table' },
+  'potted plant': { ar: 'أصيص نبات', g: 'm', en: 'plant pot' },
+  'fire hydrant': { ar: 'حنفية إطفاء', g: 'f', en: 'fire hydrant' },
+  'parking meter': { ar: 'عداد موقف', g: 'm', en: 'parking meter' },
+  'stop sign': { ar: 'إشارة قف', g: 'f', en: 'stop sign' },
+  dog: { ar: 'كلب', g: 'm', en: 'dog' },
+  cat: { ar: 'قطة', g: 'f', en: 'cat' },
+  horse: { ar: 'حصان', g: 'm', en: 'horse' },
+  sheep: { ar: 'خروف', g: 'm', en: 'sheep' },
+  cow: { ar: 'بقرة', g: 'f', en: 'cow' },
+};
+/** An obstacle whose type is not clear is never given a guessed name. */
+const OBSTACLE = { ar: 'عائق', g: 'm' as Gender, en: 'obstacle' };
+const nameOf = (label?: string) => (label && NAMES[label]) || OBSTACLE;
+
+const AR_DIRECTION: Record<Direction, string> = { ahead: 'أمامك', left: 'على يسارك', right: 'على يمينك' };
+const EN_DIRECTION: Record<Direction, string> = { ahead: 'ahead', left: 'on your left', right: 'on your right' };
+const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** The spoken sentence for an announcement: what, where, and roughly how close. Never metres. */
+export function describeObstacles(announcement: ObstacleAnnouncement, locale: GuidanceLocale): string {
+  const { primary, secondary } = announcement;
+  const name = nameOf(primary.label);
+  if (locale === 'ar') {
+    const where = AR_DIRECTION[primary.direction];
+    const f = name.g === 'f';
+    const base = primary.proximity === 'very-close'
+      ? `تحذير، يوجد ${name.ar} ${f ? 'قريبة جدًا' : 'قريب جدًا'} ${where}`
+      : primary.approaching
+      ? `انتبه، ${name.ar} ${f ? 'تقترب' : 'يقترب'} ${where}`
+      : primary.proximity === 'near'
+      ? `انتبه، ${name.ar} ${f ? 'قريبة' : 'قريب'} ${where}`
+      : `يوجد ${name.ar} ${where}`;
+    return secondary ? `${base} و${AR_DIRECTION[secondary.direction]} ${nameOf(secondary.label).ar}.` : `${base}.`;
+  }
+  const where = EN_DIRECTION[primary.direction];
+  const base = primary.proximity === 'very-close'
+    ? `Warning, ${name.en} very close ${where}`
+    : primary.approaching
+    ? `Careful, ${name.en} approaching ${where}`
+    : primary.proximity === 'near'
+    ? `Careful, ${name.en} close ${where}`
+    : `${capitalize(name.en)} ${where}`;
+  if (!secondary) return `${base}.`;
+  const other = nameOf(secondary.label).en;
+  return `${base}, and ${/^[aeiou]/.test(other) ? 'an' : 'a'} ${other} ${EN_DIRECTION[secondary.direction]}.`;
+}
 export type ObstacleUnavailable = 'unsupported' | 'permission-denied' | 'camera-error' | 'model-error' | 'front-camera' | 'background';
 
 /** What the walker is told about obstacle monitoring itself. */
@@ -64,8 +161,6 @@ export type ObstacleStatus =
   | { state: 'unavailable'; reason: ObstacleUnavailable };
 
 export const obstaclePhrases = {
-  ahead: (locale: GuidanceLocale) => (locale === 'ar' ? 'انتبه، يوجد عائق أمامك.' : 'Careful, obstacle ahead.'),
-  near: (locale: GuidanceLocale) => (locale === 'ar' ? 'توقف، يوجد عائق قريب أمامك.' : 'Stop. Obstacle close ahead.'),
   on: (locale: GuidanceLocale) =>
     locale === 'ar'
       ? 'تنبيه العوائق بالكاميرا يعمل. إنه مساعدة فقط، استمر بالحذر المعتاد.'
@@ -93,8 +188,6 @@ export const obstaclePhrases = {
       ? 'لا تتوفر كاميرا خلفية، لذلك تنبيه العوائق متوقف.'
       : 'No rear camera is available, so obstacle alerts are off.',
 };
-
-export type AnnouncementPriority = 'normal' | 'high' | 'urgent';
 
 /** The sentence for a change in monitoring status, if the walker needs to hear it. */
 export function statusAnnouncement(

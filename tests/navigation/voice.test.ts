@@ -7,10 +7,12 @@ import { computeProgress } from '@/utils/navigation/progress';
 class FakeEngine implements SpeechEngine {
   isSpeaking?: () => boolean;
   log: string[] = [];
+  options: ({ urgent?: boolean; immediate?: boolean } | undefined)[] = [];
   active?: { text: string; done: () => void; stopped: () => void; error: (e: unknown) => void };
-  speak(text: string, cb: { onDone: () => void; onStopped: () => void; onError: (e: unknown) => void }) {
+  speak(text: string, cb: { onDone: () => void; onStopped: () => void; onError: (e: unknown) => void }, options?: { urgent?: boolean; immediate?: boolean }) {
     if (this.active) throw new Error(`overlap: "${text}" while "${this.active.text}" is playing`);
     this.log.push(text);
+    this.options.push(options);
     this.active = { text, done: cb.onDone, stopped: cb.onStopped, error: cb.onError };
   }
   stop() {
@@ -250,6 +252,23 @@ describe('hazard warnings in the speech queue', () => {
     engine.finish();
     expect(queue.repeat()).toBe(true);
     expect(engine.active?.text).toBe('Turn left.');
+  });
+
+  it('asks the voice to speak an obstacle warning immediately', () => {
+    const { engine, queue } = setup();
+    queue.enqueue({ text: 'Careful, car close on your right.', priority: 'high', immediate: true });
+    queue.enqueue({ text: HAZARD, priority: 'urgent', immediate: true });
+    expect(engine.options).toEqual([{ urgent: true, immediate: true }, { urgent: true, immediate: true }]);
+  });
+
+  it('drops an obstacle warning that waited too long behind a turn instruction', () => {
+    const { engine, queue } = setup();
+    let fresh = true;
+    queue.enqueue({ text: 'Turn left.', priority: 'high', instruction: true });
+    queue.enqueue({ text: 'Person ahead.', priority: 'high', immediate: true, isCurrent: () => fresh });
+    fresh = false;
+    engine.finish();
+    expect(engine.log).toEqual(['Turn left.']);
   });
 
   it('silences hazards and the pending resume when guidance is cleared', () => {

@@ -3,7 +3,7 @@ import { AppState } from 'react-native';
 import type { Locale } from '@/i18n';
 import { ObstacleAwarenessEngine } from '@/utils/obstacles/engine';
 import { startObstacleCamera, type ObstacleCamera, type ObstacleCameraFailure } from '@/utils/obstacles/camera';
-import { obstaclePhrases, statusAnnouncement, type AnnouncementPriority, type ObstacleStatus, type ObstacleUnavailable } from '@/utils/obstacles/warnings';
+import { describeObstacles, statusAnnouncement, type AnnouncementPriority, type ObstacleStatus, type ObstacleUnavailable } from '@/utils/obstacles/warnings';
 
 /**
  * Camera obstacle awareness for a walking session. Runs only while `enabled`,
@@ -12,6 +12,8 @@ import { obstaclePhrases, statusAnnouncement, type AnnouncementPriority, type Ob
  */
 
 const TICK_MS = 1_000;
+/** A warning still waiting after this long describes a scene that has moved on. */
+const STALE_WARNING_MS = 2_000;
 
 export function useObstacleAwareness({
   enabled,
@@ -20,7 +22,7 @@ export function useObstacleAwareness({
 }: {
   enabled: boolean;
   locale: Locale;
-  announce: (text: string, priority: AnnouncementPriority) => void;
+  announce: (text: string, priority: AnnouncementPriority, options?: { immediate?: boolean; isCurrent?: () => boolean }) => void;
 }) {
   const [status, setStatusState] = useState<ObstacleStatus>({ state: 'off' });
   const [paused, setPaused] = useState(false);
@@ -43,7 +45,8 @@ export function useObstacleAwareness({
     statusRef.current = next;
     setStatusState(next);
     const message = statusAnnouncement(previous, next, localeRef.current);
-    if (message) announceRef.current(message.text, message.priority);
+    // Losing the camera mid-walk is said at once, in whatever voice is ready.
+    if (message) announceRef.current(message.text, message.priority, { immediate: message.priority === 'urgent' });
   }, []);
 
   useEffect(() => {
@@ -84,10 +87,14 @@ export function useObstacleAwareness({
     void startObstacleCamera((frame) => {
       if (cancelled) return;
       const output = engine.frame(frame);
-      const lang = localeRef.current;
       if (output.warning) {
-        // Close obstacles cut in; "ahead" waits behind a turn instruction already playing.
-        announceRef.current(output.warning === 'near' ? obstaclePhrases.near(lang) : obstaclePhrases.ahead(lang), output.warning === 'near' ? 'urgent' : 'high');
+        // Close and in the path cuts in over everything; the rest waits behind a turn
+        // instruction, and is dropped rather than read out once it is stale.
+        const at = Date.now();
+        announceRef.current(describeObstacles(output.warning, localeRef.current), output.warning.priority, {
+          immediate: true,
+          isCurrent: () => Date.now() - at <= STALE_WARNING_MS,
+        });
       }
       setStatus(output.reliability.reliable ? { state: 'active' } : { state: 'unreliable', reason: output.reliability.reason! });
     }, onFailure).then((started) => {

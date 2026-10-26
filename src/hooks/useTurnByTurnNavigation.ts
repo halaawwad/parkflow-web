@@ -144,10 +144,10 @@ export function useTurnByTurnNavigation(locale: Locale) {
 
   /** Speaks (unless muted or backgrounded) and mirrors the message to assistive technology. */
   const say = useCallback(
-    (text: string, options: { priority?: SpeechPriority; instruction?: boolean; isCurrent?: () => boolean } = {}) => {
+    (text: string, options: { priority?: SpeechPriority; instruction?: boolean; isCurrent?: () => boolean; immediate?: boolean } = {}) => {
       setLiveMessage(text);
       if (backgroundRef.current) return;
-      queue.enqueue({ text, priority: options.priority, instruction: options.instruction, isCurrent: options.isCurrent });
+      queue.enqueue({ text, priority: options.priority, instruction: options.instruction, isCurrent: options.isCurrent, immediate: options.immediate });
       // A screen-reader user with voice muted still hears guidance through their reader.
       if (queue.isMuted && screenReaderRef.current && Platform.OS !== 'web') {
         AccessibilityInfo.announceForAccessibility(text);
@@ -448,7 +448,11 @@ export function useTurnByTurnNavigation(locale: Locale) {
    * Speaks a message from outside guidance (a spoken request, obstacle
    * awareness) through the guidance queue, so two voices never overlap.
    */
-  const announce = useCallback((text: string, priority: SpeechPriority = 'normal') => say(text, { priority }), [say]);
+  const announce = useCallback(
+    (text: string, priority: SpeechPriority = 'normal', options: { immediate?: boolean; isCurrent?: () => boolean } = {}) =>
+      say(text, { priority, ...options }),
+    [say],
+  );
 
   /** Following and the full-route overview are exclusive camera modes. */
   const setFollowing = useCallback((next: boolean) => {

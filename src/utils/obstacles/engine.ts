@@ -1,6 +1,6 @@
-import { ObstacleTracker, type FrameDetection, type Proximity, type TrackingConfig } from './tracker';
+import { ObstacleTracker, type FrameDetection, type TrackingConfig } from './tracker';
 import { frameProblem, ReliabilityMonitor, type FrameQuality, type Reliability, type ReliabilityConfig } from './quality';
-import { WarningPolicy, type WarningTiming } from './warnings';
+import { WarningPolicy, type ObstacleAnnouncement, type WarningTiming } from './warnings';
 
 /**
  * The obstacle awareness pipeline, independent of GPS and routing: one
@@ -18,7 +18,7 @@ export interface ObstacleFrame {
 }
 
 export interface EngineOutput {
-  warning?: Proximity;
+  warning?: ObstacleAnnouncement;
   reliability: Reliability;
 }
 

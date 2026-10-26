@@ -180,4 +180,35 @@ describe('natural navigation voice', () => {
     await flush();
     expect(attempts).toBe(2);
   });
+
+  it('says an obstacle warning at once in the device voice instead of waiting for natural audio', async () => {
+    const { engine, device, played, requests } = setup({ synthesize: () => new Promise(() => undefined) });
+    engine.speak('Careful, car close on your right.', { onDone: () => undefined, onStopped: () => undefined, onError: () => undefined }, { urgent: true, immediate: true });
+    // Spoken synchronously: no timer, no server round trip.
+    expect(device).toEqual(['Careful, car close on your right.']);
+    await flush();
+    expect(played).toEqual([]);
+    expect(requests).toEqual([]);
+  });
+
+  it('tells the fallback voice a warning is immediate, so it is spoken even where routine speech stays quiet', () => {
+    const seen: unknown[] = [];
+    const engine = createNeuralSpeechEngine({
+      synthesize: () => new Promise(() => undefined),
+      fallback: { speak: (_text, cb, options) => { seen.push(options); cb.onDone(); }, stop: () => undefined },
+      player: { play: () => undefined, stop: () => undefined, isPlaying: () => false },
+    });
+    engine.speak('Warning, obstacle very close ahead.', { onDone: () => undefined, onStopped: () => undefined, onError: () => undefined }, { urgent: true, immediate: true });
+    expect(seen).toEqual([{ urgent: true, immediate: true }]);
+  });
+
+  it('still uses natural audio for an obstacle warning that is already cached', async () => {
+    const { engine, device, played } = setup();
+    engine.prefetch(['Person ahead.']);
+    await flush();
+    engine.speak('Person ahead.', { onDone: () => undefined, onStopped: () => undefined, onError: () => undefined }, { urgent: true, immediate: true });
+    await flush();
+    expect(played).toEqual(['audio:Person ahead.']);
+    expect(device).toEqual([]);
+  });
 });

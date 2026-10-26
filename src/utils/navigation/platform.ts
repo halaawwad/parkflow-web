@@ -343,8 +343,9 @@ export function createNavigationVoice(
   // one is never used: the sentence stays on screen and in the live region.
   const naturalDevice = () => voice().natural === true;
   const fallback: SpeechEngine = {
-    speak(text, callbacks) {
-      if (naturalDevice()) device.speak(text, callbacks);
+    speak(text, callbacks, options) {
+      // Obstacle warnings are the exception: heard at once in any voice beats silence.
+      if (naturalDevice() || options?.immediate) device.speak(text, callbacks);
       else callbacks.onDone();
     },
     stop: () => device.stop(),

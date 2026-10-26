@@ -1,6 +1,7 @@
 import type { ObjectDetector } from '@mediapipe/tasks-vision';
 import { OBSTACLE_LABELS, type FrameDetection } from './tracker';
 import { measureFrame, toGray } from './quality';
+import { FramePacer } from './pacing';
 import type { ObstacleFrame } from './engine';
 import type { ObstacleCamera, ObstacleCameraFailure } from './camera';
 
@@ -25,10 +26,8 @@ const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/object_detect
 const SELF_TEST_IMAGE = 'https://storage.googleapis.com/mediapipe-assets/portrait.jpg';
 const SELF_TEST_MIN_SCORE = 0.6;
 
-/** Analysis pacing: about 2–6 frames a second, slower when the model is slow or the battery is low. */
-const MIN_INTERVAL_MS = 160;
-const LOW_POWER_INTERVAL_MS = 450;
-const MAX_INTERVAL_MS = 700;
+/** While the camera is still warming up: check again soon. */
+const NOT_READY_RETRY_MS = 50;
 const THUMB_W = 64;
 const THUMB_H = 48;
 
@@ -145,11 +144,11 @@ export async function startObstacleCamera(
   canvas.width = THUMB_W;
   canvas.height = THUMB_H;
   const context = canvas.getContext('2d', { willReadFrequently: true });
-  const minInterval = (await lowPower()) ? LOW_POWER_INTERVAL_MS : MIN_INTERVAL_MS;
+  const pacer = new FramePacer(await lowPower());
 
   const step = () => {
     if (stopped) return;
-    let delay = minInterval;
+    let delay = NOT_READY_RETRY_MS;
     if (video.readyState >= 2 && video.videoWidth && video.videoHeight) {
       const started = performance.now();
       let detections: FrameDetection[];
@@ -177,7 +176,7 @@ export async function startObstacleCamera(
         quality = measureFrame(toGray(context.getImageData(0, 0, THUMB_W, THUMB_H).data), THUMB_W, THUMB_H);
       }
       onFrame({ detections, quality, inferenceMs, at: Date.now() });
-      delay = Math.min(MAX_INTERVAL_MS, Math.max(minInterval, inferenceMs * 2));
+      delay = pacer.next(inferenceMs);
     }
     timer = setTimeout(step, delay);
   };
