@@ -44,11 +44,11 @@ export const shadow: Record<Level, ViewStyle> = Platform.select({
 
 /** Coloured depth for the primary CTA — used sparingly. */
 export const brandGlow: ViewStyle = Platform.select({
-  ios: { shadowColor: '#16704F', shadowOpacity: 0.22, shadowRadius: 16, shadowOffset: { width: 0, height: 8 } },
+  ios: { shadowColor: '#16704F', shadowOpacity: 0.16, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
   android: { elevation: 4, shadowColor: '#16704F' },
   default: {
     // The inset line is a hairline of light along the top edge: a lit, machined button.
-    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.16), 0 1px 2px rgba(11,58,44,0.20), 0 10px 24px -8px rgba(22,112,79,0.45)',
+    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.14), 0 1px 2px rgba(11,58,44,0.18), 0 6px 14px -6px rgba(22,112,79,0.32)',
   } as ViewStyle,
 }) as ViewStyle;
 

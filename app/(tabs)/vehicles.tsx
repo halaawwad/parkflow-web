@@ -55,10 +55,11 @@ export default function VehiclesScreen() {
           <AppButton
             label={t('warning.entry')}
             size="sm"
-            variant="secondary"
+            variant="ghost"
             fullWidth={false}
-            style={{ alignSelf: 'center' }}
-            icon={<ShieldAlert size={16} color={colors.text} strokeWidth={2.2} />}
+            // A flat chip on the recessed track: a header action, not a rival to the title.
+            style={{ alignSelf: 'center', paddingHorizontal: spacing.md, backgroundColor: colors.track }}
+            icon={<ShieldAlert size={16} color={colors.textSecondary} strokeWidth={2.2} />}
             onPress={() => router.push('/vehicles/warning-check')}
           />
         }

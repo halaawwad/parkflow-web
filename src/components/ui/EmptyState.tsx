@@ -5,7 +5,6 @@ import { AppButton, type ButtonVariant } from './AppButton';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/spacing';
 import { radius } from '@/theme/radius';
-import { shadow } from '@/theme/shadows';
 
 export interface EmptyStateProps {
   icon?: ReactNode;
@@ -45,17 +44,13 @@ export function EmptyState({
       {icon ? (
         <View
           style={{
-            width: 64,
-            height: 64,
-            borderRadius: radius.xl,
+            width: 56,
+            height: 56,
+            borderRadius: radius.pill,
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: colors.brandSoft,
-            // A second ring of the brand tint gives the icon a quiet halo.
-            borderWidth: 6,
-            borderColor: colors.brandSofter,
             marginBottom: spacing.xs,
-            ...shadow.xs,
           }}
         >
           {icon}

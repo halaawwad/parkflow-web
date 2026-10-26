@@ -71,7 +71,7 @@ function MenuIcon({ children }: { children: React.ReactNode }) {
 export default function ProfileScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { t, dateLocale } = useLocale();
+  const { t, dateLocale, row } = useLocale();
   const staff = useIsGateStaff();
   const managementAccess = useManagementAccess();
   const insets = useSafeAreaInsets();
@@ -107,24 +107,25 @@ export default function ProfileScreen() {
       >
         <TabHeader title={t('profile.title')} />
 
-        <HeroSurface padding="xl" contentStyle={{ alignItems: 'center', gap: spacing.md }}>
+        {/* An identity card, read in one line like a membership card rather than a centred poster. */}
+        <HeroSurface padding="lg" contentStyle={{ flexDirection: row, alignItems: 'center', gap: spacing.lg }}>
           {/* A brass ring sets the initials apart from the deep surface. */}
           <View style={{ padding: 3, borderRadius: 999, borderWidth: 1.5, borderColor: colors.accent }}>
-            <Avatar name={user?.fullName} size={68} tone="surface" />
+            <Avatar name={user?.fullName} size={56} tone="surface" />
           </View>
-          <View style={{ gap: 4, alignItems: 'center' }}>
-            <AppText variant="h2" align="center" color="onDeep">
+          <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+            <AppText variant="h3" color="onDeep" numberOfLines={1}>
               {user?.fullName}
             </AppText>
-            <AppText variant="bodySm" color="onDeepMuted" numeric align="center">
+            <AppText variant="bodySm" color="onDeepMuted" numeric numberOfLines={1}>
               {user?.email}
             </AppText>
+            {user?.createdAt ? (
+              <AppText variant="caption" numberOfLines={1} style={{ color: colors.accent, marginTop: 4 }}>
+                {t('profile.memberSince')} {formatDate(user.createdAt, dateLocale)}
+              </AppText>
+            ) : null}
           </View>
-          {user?.createdAt ? (
-            <AppText variant="caption" color="onDeepMuted" align="center">
-              {t('profile.memberSince')} {formatDate(user.createdAt, dateLocale)}
-            </AppText>
-          ) : null}
         </HeroSurface>
 
         {user?.role === 'ADMIN' || user?.role === 'PARKING_OPERATOR' || managementAccess.data?.hasAccess ? (

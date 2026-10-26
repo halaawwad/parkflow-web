@@ -29,7 +29,8 @@ export function formatMoney(minor: number, options: FormatOptions = {}): string 
     maximumFractionDigits: decimals,
   });
   const sign = signed ? (minor < 0 ? '-' : '+') : minor < 0 ? '-' : '';
-  const symbol = hideSymbol ? '' : ` ${CURRENCY_SYMBOL[currency]}`;
+  // A no-break space keeps the symbol on the amount's line: "5.00" and "₪" never wrap apart.
+  const symbol = hideSymbol ? '' : `\u00A0${CURRENCY_SYMBOL[currency]}`;
   return `${sign}${body}${symbol}`;
 }
 
@@ -37,5 +38,5 @@ export function formatMoney(minor: number, options: FormatOptions = {}): string 
 export function formatRate(minorPerHour: number, currency: Currency = 'ILS'): string {
   const value = toMajor(minorPerHour);
   const body = Number.isInteger(value) ? String(value) : value.toFixed(2);
-  return `${body} ${CURRENCY_SYMBOL[currency]}`;
+  return `${body}\u00A0${CURRENCY_SYMBOL[currency]}`;
 }

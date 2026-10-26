@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
-import { Info, TriangleAlert, CircleCheck, CircleAlert } from 'lucide-react-native';
+import { Info, TriangleAlert, CircleCheck, CircleAlert, ArrowLeft, ArrowRight } from 'lucide-react-native';
 import { AppText } from './AppText';
 import { PressableScale } from './PressableScale';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -29,7 +29,8 @@ export function InlineNotice({
   style,
 }: InlineNoticeProps) {
   const { colors } = useTheme();
-  const { row } = useLocale();
+  const { row, isRTL } = useLocale();
+  const Arrow = isRTL ? ArrowLeft : ArrowRight;
 
   const config = {
     info: { bg: colors.infoSoft, fg: colors.infoText, Icon: Info },
@@ -45,7 +46,8 @@ export function InlineNotice({
         {
           flexDirection: row,
           gap: spacing.md,
-          padding: spacing.lg,
+          paddingVertical: spacing.md + 2,
+          paddingHorizontal: spacing.lg,
           borderRadius: radius.lg,
           backgroundColor: config.bg,
           alignItems: 'flex-start',
@@ -53,7 +55,7 @@ export function InlineNotice({
         style,
       ]}
     >
-      {icon ?? <config.Icon size={20} color={config.fg} strokeWidth={2.2} />}
+      {icon ?? <config.Icon size={18} color={config.fg} strokeWidth={2.2} style={{ marginTop: 2 }} />}
 
       <View style={{ flex: 1, gap: 4 }}>
         <AppText variant="title" style={{ color: config.fg }}>
@@ -65,10 +67,17 @@ export function InlineNotice({
           </AppText>
         ) : null}
         {action ? (
-          <PressableScale onPress={action.onPress} haptic="light" hitSlop={8} style={{ marginTop: 4 }}>
-            <AppText variant="label" style={{ color: config.fg, textDecorationLine: 'underline' }}>
+          <PressableScale
+            onPress={action.onPress}
+            haptic="light"
+            hitSlop={8}
+            accessibilityRole="button"
+            style={{ marginTop: spacing.xs, flexDirection: row, alignItems: 'center', gap: spacing.xs, alignSelf: isRTL ? 'flex-end' : 'flex-start' }}
+          >
+            <AppText variant="label" style={{ color: config.fg }}>
               {action.label}
             </AppText>
+            <Arrow size={14} color={config.fg} strokeWidth={2.4} />
           </PressableScale>
         ) : null}
       </View>

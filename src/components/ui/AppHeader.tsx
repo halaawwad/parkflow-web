@@ -67,8 +67,10 @@ export function AppHeader({
               <BackIcon size={20} color={iconColor} strokeWidth={2.4} />
             )
           }
-          tone={tone === 'onDeep' ? 'glass' : 'surface'}
+          tone={tone === 'onDeep' ? 'glass' : 'ghost'}
           size={40}
+          // Flat on a recessed disc: navigation chrome should not out-shout the title.
+          style={tone === 'onDeep' ? undefined : { backgroundColor: colors.track }}
           onPress={handleLeading}
           accessibilityLabel={leading === 'close' ? t('common.close') : t('common.back')}
         />
