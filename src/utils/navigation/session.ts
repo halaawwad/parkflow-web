@@ -37,6 +37,16 @@ export interface NavigationState {
   lastFix?: LocationFix;
   /** Last fix accurate enough to guide with. */
   lastGoodFix?: LocationFix;
+  /**
+   * Most accurate fix seen while locating. A computer (Wi-Fi/IP location) or a
+   * phone indoors may never get a guidance-grade fix; the route is then planned
+   * from this one after a short wait instead of locating forever. Guidance itself
+   * still waits for an accurate fix (the signal shows as weak until then).
+   */
+  bestFix?: LocationFix;
+  locatingSince?: number;
+  /** Locating has waited long enough to plan from `bestFix`. */
+  coarseStart?: boolean;
   lastFixAt?: number;
   weakSince?: number;
   heading?: number;
@@ -179,18 +189,35 @@ function speedOf(fix: LocationFix, previous: LocationFix | undefined, current: n
 export const guidanceReliable = (state: NavigationState) =>
   state.status === 'active' && state.signal === 'good' && !state.paused && Boolean(state.progress);
 
+/** How long locating waits for a guidance-grade fix before planning from the best one so far. */
+export const COARSE_START_MS = 4_000;
+
+/** The fix a route is planned from: an accurate one, or the best available once locating has waited. */
+export const planningFix = (state: NavigationState): LocationFix | undefined =>
+  state.lastGoodFix ?? (state.coarseStart ? state.bestFix : undefined);
+
 /** Whether the hook should ask the router for a route now. */
 export function routeRequestDue(state: NavigationState, now: number): boolean {
-  if (state.paused || !state.lastGoodFix) return false;
-  if (state.status === 'locating') return true;
+  if (state.paused) return false;
+  if (state.status === 'locating') {
+    if (state.lastGoodFix) return true;
+    return Boolean(state.bestFix) && (state.coarseStart || now - (state.locatingSince ?? now) >= COARSE_START_MS);
+  }
+  if (!state.lastGoodFix) return false;
   if (state.status !== 'active' || !state.rerouteReason) return false;
   const backoff = Math.min(NAV.maxBackoffMs, NAV.rerouteIntervalMs * Math.max(1, state.routeFailures));
   return state.lastRouteRequestAt === undefined || now - state.lastRouteRequestAt >= backoff;
 }
 
 function applyFix(state: NavigationState, fix: LocationFix, now: number): NavigationState {
-  const base: NavigationState = { ...state, lastFix: fix, lastFixAt: now };
   const tuning = tuningFor(state.profile);
+  const moreAccurate = !state.bestFix || (fix.accuracy ?? Infinity) <= (state.bestFix.accuracy ?? Infinity);
+  const base: NavigationState = {
+    ...state,
+    lastFix: fix,
+    lastFixAt: now,
+    bestFix: state.status === 'locating' && moreAccurate ? fix : state.bestFix,
+  };
 
   if (!isGood(fix, tuning)) {
     const weakSince = state.weakSince ?? now;
@@ -265,7 +292,7 @@ function applyFix(state: NavigationState, fix: LocationFix, now: number): Naviga
 export function navigationReducer(state: NavigationState, event: NavigationEvent): NavigationState {
   switch (event.type) {
     case 'start':
-      return { ...initialNavigationState, status: 'locating', profile: event.profile ?? 'driving', lastFixAt: event.now };
+      return { ...initialNavigationState, status: 'locating', profile: event.profile ?? 'driving', lastFixAt: event.now, locatingSince: event.now };
     case 'stop':
       return initialNavigationState;
     case 'permission-denied':
@@ -290,6 +317,13 @@ export function navigationReducer(state: NavigationState, event: NavigationEvent
       return applyFix(state, event.fix, event.now);
     case 'tick': {
       if (state.status === 'idle' || state.status === 'arrived' || state.status === 'error' || state.paused) return state;
+      // Fixes may have stopped arriving (a computer reports once); the wait must still end.
+      if (
+        state.status === 'locating' && !state.coarseStart && !state.lastGoodFix && state.bestFix &&
+        event.now - (state.locatingSince ?? event.now) >= COARSE_START_MS
+      ) {
+        return { ...state, coarseStart: true };
+      }
       if (state.lastFixAt !== undefined && event.now - state.lastFixAt >= NAV.lostAfterMs) {
         return state.signal === 'lost' ? state : { ...state, signal: 'lost' };
       }
@@ -301,11 +335,12 @@ export function navigationReducer(state: NavigationState, event: NavigationEvent
     case 'route-requested':
       return {
         ...state,
+        coarseStart: state.coarseStart || (state.status === 'locating' && !state.lastGoodFix),
         status: state.status === 'locating' ? 'routing' : state.status === 'active' ? 'rerouting' : state.status,
         lastRouteRequestAt: event.now,
       };
     case 'route-ready': {
-      const fix = state.lastGoodFix;
+      const fix = planningFix(state);
       const band = fix ? offRouteThreshold(fix.accuracy, tuningFor(state.profile)) : 0;
       const progress = fix ? computeProgress(event.route, fix.point, undefined, 0, Infinity) : undefined;
       const startGap = progress?.offRoute ?? 0;
@@ -314,6 +349,8 @@ export function navigationReducer(state: NavigationState, event: NavigationEvent
         status: 'active',
         route: event.route,
         progress,
+        // Planned from a coarse fix: no turn guidance until an accurate one arrives.
+        signal: state.lastGoodFix ? state.signal : 'weak',
         startGap,
         joinedRoute: startGap <= band,
         epoch: state.epoch + 1,

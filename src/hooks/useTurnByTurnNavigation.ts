@@ -190,7 +190,8 @@ export function useTurnByTurnNavigation(locale: Locale) {
   const requestRoute = useCallback(async () => {
     const current = stateRef.current;
     const target = targetRef.current;
-    const fix = current.lastGoodFix;
+    // An accurate fix, or (after a short wait) the best one a computer or indoor phone can give.
+    const fix = current.lastGoodFix ?? current.bestFix;
     if (!target || !fix || inFlightRef.current) return;
     const now = Date.now();
     const via = current.route ? remainingVia(current) : target.via ?? [];
