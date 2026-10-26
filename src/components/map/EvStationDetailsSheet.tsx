@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Linking, ScrollView, View } from 'react-native';
-import { AppButton, AppText, BottomSheet } from '@/components/ui';
+import { AppText, BottomSheet } from '@/components/ui';
 import { useLocale } from '@/hooks/useLocale';
 import type { EvChargingStation } from '@/types';
+import { spacing } from '@/theme/spacing';
+import { DetailActions, DetailList, DetailNote, type DetailRow } from './PlaceDetails';
 
 function safeSource(value?: string): string | undefined {
   if (!value) return;
@@ -22,27 +24,38 @@ export function EvStationDetailsSheet({ station, onClose, onRoute }: { station?:
     [t('ev.verified'), station.lastVerifiedAt ? new Date(station.lastVerifiedAt).toLocaleDateString(dateLocale) : undefined],
   ] : [];
   return <BottomSheet visible={Boolean(station)} onClose={onClose} title={station?.name} subtitle={t('ev.station')}>
-    {station ? <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ gap: 12 }}>
-      <AppText variant="caption" color="textSecondary">{t('ev.statusLabel')}</AppText>
-      <AppText weight="bold">{t(`ev.status.${station.status}`)}</AppText>
-      <AppText variant="caption" color="textSecondary">{t('ev.accessLabel')}</AppText>
-      <AppText>{t(`ev.access.${station.accessType}`)}</AppText>
-      {rows.filter(([, value]) => Boolean(value)).map(([label, value], i) => <View key={i} style={{ gap: 2 }}>
-        {label ? <AppText variant="caption" color="textSecondary">{label}</AppText> : null}<AppText>{value}</AppText>
-      </View>)}
-      {station.pricingText ? <AppText variant="caption" color="textSecondary">{t('ev.pricingNote')}</AppText> : null}
-      {station.connectors.length ? <AppText variant="caption" color="textSecondary">{t('ev.connector')} · {t('ev.power')}</AppText> : null}
-      {station.connectors.map((c, i) => <View key={i} style={{ flexDirection: row, justifyContent: 'space-between', gap: 8 }}>
-        <AppText weight="bold">{t(`ev.connector.${c.type}`)}</AppText><AppText variant="caption">{t('ev.quantity', { count: c.quantity, power: c.powerKw })}</AppText>
-      </View>)}
-      <AppText variant="caption" color="textSecondary">{t('ev.liveNote')}</AppText>
-      {linkError ? <AppText variant="caption" color="danger">{t('ev.linkFailed')}</AppText> : null}
-      <AppButton label={t('ev.route')} size="sm" onPress={() => onRoute(station)} />
-      <View style={{ flexDirection: row, gap: 8 }}>
-        {phone ? <AppButton label={t('ev.call')} size="sm" variant="secondary" style={{ flex: 1 }} onPress={() => void open(`tel:${phone}`)} /> : null}
-        {source ? <AppButton label={t('ev.openSource')} size="sm" variant="secondary" style={{ flex: 1 }} onPress={() => void open(source)} /> : null}
-      </View>
-      <AppButton label={t('ev.close')} variant="ghost" size="sm" onPress={onClose} />
+    {station ? <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ gap: spacing.md }} showsVerticalScrollIndicator={false}>
+      <DetailList rows={[
+        [t('ev.statusLabel'), <AppText key="status" variant="title">{t(`ev.status.${station.status}`)}</AppText>],
+        [t('ev.accessLabel'), t(`ev.access.${station.accessType}`)],
+        ...(rows as DetailRow[]),
+      ]} />
+      {station.pricingText ? <DetailNote>{t('ev.pricingNote')}</DetailNote> : null}
+      {station.connectors.length ? (
+        <DetailList rows={[[
+          `${t('ev.connector')} · ${t('ev.power')}`,
+          <View key="connectors" style={{ gap: spacing.xs, marginTop: 2 }}>
+            {station.connectors.map((c, i) => (
+              <View key={i} style={{ flexDirection: row, justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm }}>
+                <AppText variant="label">{t(`ev.connector.${c.type}`)}</AppText>
+                <AppText variant="caption" color="textSecondary" numeric>{t('ev.quantity', { count: c.quantity, power: c.powerKw })}</AppText>
+              </View>
+            ))}
+          </View>,
+        ]]} />
+      ) : null}
+      <DetailNote>{t('ev.liveNote')}</DetailNote>
+      {linkError ? <DetailNote tone="danger">{t('ev.linkFailed')}</DetailNote> : null}
+      <DetailActions
+        routeLabel={t('ev.route')}
+        onRoute={() => onRoute(station)}
+        links={[
+          ...(phone ? [{ key: 'call', label: t('ev.call'), onPress: () => void open(`tel:${phone}`) }] : []),
+          ...(source ? [{ key: 'source', label: t('ev.openSource'), onPress: () => void open(source) }] : []),
+        ]}
+        closeLabel={t('ev.close')}
+        onClose={onClose}
+      />
     </ScrollView> : null}
   </BottomSheet>;
 }

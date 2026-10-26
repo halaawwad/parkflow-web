@@ -43,7 +43,7 @@ export function NearbyParkingPanel({
   onSelectZone,
 }: NearbyParkingPanelProps) {
   const { colors } = useTheme();
-  const { t, row, locale } = useLocale();
+  const { t, row, locale, alignStart } = useLocale();
   const { height: windowHeight } = useWindowDimensions();
   const [full, setFull] = useState(false);
   const Chevron = expanded ? ChevronDown : ChevronUp;
@@ -122,7 +122,7 @@ export function NearbyParkingPanel({
         {loading ? (
           <SkeletonGroup count={expanded ? 3 : 1} height={58} style={{ paddingVertical: spacing.xs }} />
         ) : error ? (
-          <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.md, gap: spacing.sm, alignItems: 'flex-start' }}>
+          <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.md, gap: spacing.sm, alignItems: alignStart }}>
             <AppText variant="title">{t('map.zonesFailed')}</AppText>
             <AppText variant="caption" color="textSecondary">
               {t('map.zonesFailedBody')}

@@ -28,7 +28,7 @@ export default function ReservationsScreen() {
   return <Screen>
     <AppHeader title={t('reservation.myReservations')} />
     <View style={{ gap: spacing.lg }}>
-      <Segmented value={tab} onChange={setTab} options={[
+      <Segmented variant="inset" value={tab} onChange={setTab} options={[
         { value: 'upcoming', label: t('reservation.upcoming'), badge: groups.upcoming.length },
         { value: 'previous', label: t('reservation.previous'), badge: groups.previous.length },
       ]} />

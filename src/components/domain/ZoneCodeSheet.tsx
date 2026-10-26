@@ -35,7 +35,7 @@ export interface ZoneCodeSheetProps {
  */
 export function ZoneCodeSheet({ visible, onClose, onResolved, onScanQr }: ZoneCodeSheetProps) {
   const { colors } = useTheme();
-  const { t } = useLocale();
+  const { t, row } = useLocale();
   const [code, setCode] = useState('');
 
   const lookup = useMutation({
@@ -80,15 +80,18 @@ export function ZoneCodeSheet({ visible, onClose, onResolved, onScanQr }: ZoneCo
             accessibilityRole="button"
             accessibilityLabel={t('map.scanQr')}
             style={{
-              flexDirection: 'row',
+              flexDirection: row,
               alignItems: 'center',
               gap: spacing.md,
-              padding: spacing.lg,
+              paddingVertical: spacing.md,
+              paddingHorizontal: spacing.lg,
               borderRadius: radius.lg,
-              backgroundColor: colors.surfaceAlt,
+              backgroundColor: colors.track,
             }}
           >
-            <QrCode size={22} color={colors.brand} strokeWidth={2.1} />
+            <View style={{ width: 36, height: 36, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface }}>
+              <QrCode size={18} color={colors.brand} strokeWidth={2.1} />
+            </View>
             <View style={{ flex: 1, gap: 2 }}>
               <AppText variant="title">{t('map.scanQr')}</AppText>
               <AppText variant="caption" color="textSecondary">

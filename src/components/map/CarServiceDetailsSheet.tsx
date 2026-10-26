@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { Linking, ScrollView, View } from 'react-native';
-import { AppButton, AppText, BottomSheet } from '@/components/ui';
+import { Linking, ScrollView } from 'react-native';
+import { BottomSheet } from '@/components/ui';
 import { useLocale } from '@/hooks/useLocale';
 import type { CarServiceBusiness } from '@/types';
+import { spacing } from '@/theme/spacing';
+import { DetailActions, DetailCaveat, DetailList, DetailNote, type DetailRow } from './PlaceDetails';
 
 function safeUrl(value?: string): string | undefined {
   if (!value) return;
@@ -40,7 +42,7 @@ export function CarServiceDetailsSheet({
   onClose: () => void;
   onRoute: (service: CarServiceBusiness) => void;
 }) {
-  const { t, locale, row, dateLocale } = useLocale();
+  const { t, locale, dateLocale } = useLocale();
   const [linkError, setLinkError] = useState(false);
   const name = service ? (locale === 'ar' ? service.nameAr : service.nameEn) : undefined;
   const address = service ? (locale === 'ar' ? service.addressAr : service.addressEn) : undefined;
@@ -70,25 +72,23 @@ export function CarServiceDetailsSheet({
     [t('carServices.lastChecked'), new Date(service.lastCheckedAt).toLocaleDateString(dateLocale)],
   ] : [];
   return <BottomSheet visible={Boolean(service)} onClose={onClose} title={name} subtitle={t('carServices.details')}>
-    {service ? <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ gap: 12 }}>
-      {rows.filter(([, value]) => Boolean(value)).map(([label, value], index) => <View key={index} style={{ gap: 2 }}>
-        <AppText variant="caption" color="textSecondary">{label}</AppText>
-        <AppText>{value}</AppText>
-      </View>)}
-      {coordinateNote ? <View style={{ gap: 2 }}>
-        <AppText variant="caption" color="warningText">{t('carServices.coordinateWarning')}</AppText>
-        <AppText>{coordinateNote}</AppText>
-      </View> : null}
-      <AppText variant="caption" color="textSecondary">{t('carServices.disclaimer')}</AppText>
-      {linkError ? <AppText variant="caption" color="danger">{t('carServices.linkFailed')}</AppText> : null}
-      <AppButton label={t('carServices.route')} size="sm" onPress={() => onRoute(service)} />
-      <View style={{ flexDirection: row, gap: 8, flexWrap: 'wrap' }}>
-        {phone ? <AppButton label={t('carServices.call')} size="sm" variant="secondary" fullWidth={false} onPress={() => void open(`tel:${phone}`)} /> : null}
-        {website ? <AppButton label={t('carServices.website')} size="sm" variant="secondary" fullWidth={false} onPress={() => void open(website)} /> : null}
-        {source ? <AppButton label={t('carServices.openSource')} size="sm" variant="secondary" fullWidth={false} onPress={() => void open(source)} /> : null}
-        {secondarySource ? <AppButton label={t('carServices.openSecondarySource')} size="sm" variant="secondary" fullWidth={false} onPress={() => void open(secondarySource)} /> : null}
-      </View>
-      <AppButton label={t('carServices.close')} variant="ghost" size="sm" onPress={onClose} />
+    {service ? <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ gap: spacing.md }} showsVerticalScrollIndicator={false}>
+      <DetailList rows={rows as DetailRow[]} />
+      {coordinateNote ? <DetailCaveat title={t('carServices.coordinateWarning')} body={coordinateNote} /> : null}
+      <DetailNote>{t('carServices.disclaimer')}</DetailNote>
+      {linkError ? <DetailNote tone="danger">{t('carServices.linkFailed')}</DetailNote> : null}
+      <DetailActions
+        routeLabel={t('carServices.route')}
+        onRoute={() => onRoute(service)}
+        links={[
+          ...(phone ? [{ key: 'call', label: t('carServices.call'), onPress: () => void open(`tel:${phone}`) }] : []),
+          ...(website ? [{ key: 'website', label: t('carServices.website'), onPress: () => void open(website) }] : []),
+          ...(source ? [{ key: 'source', label: t('carServices.openSource'), onPress: () => void open(source) }] : []),
+          ...(secondarySource ? [{ key: 'source2', label: t('carServices.openSecondarySource'), onPress: () => void open(secondarySource) }] : []),
+        ]}
+        closeLabel={t('carServices.close')}
+        onClose={onClose}
+      />
     </ScrollView> : null}
   </BottomSheet>;
 }

@@ -18,7 +18,7 @@ function minutesSince(iso: string) { return Math.max(0, Math.floor((Date.now() -
 
 export function RoadReportDetailsSheet({ report, visible, onClose, onUpdated }: { report?: RoadReport; visible: boolean; onClose: () => void; onUpdated: (report: RoadReport) => void }) {
   const { colors } = useTheme();
-  const { t } = useLocale();
+  const { t, row } = useLocale();
   const confirm = useConfirmRoadReport(report?.id);
   const reject = useRejectRoadReport(report?.id);
   const [attemptedReportId, setAttemptedReportId] = useState<string>();
@@ -56,7 +56,7 @@ export function RoadReportDetailsSheet({ report, visible, onClose, onUpdated }: 
   return (
     <BottomSheet visible={visible} onClose={close} title={t(`roadReports.type.${report.type}`)}>
       <View style={{ gap: spacing.lg }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+        <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.md }}>
           <View style={{ width: 42, height: 42, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: roadReportColor(report.type, colors) }}><ReportIcon type={report.type} color={colors.textOnColor} size={21} /></View>
           <View style={{ flex: 1, gap: spacing.xs }}>
             <AppText color="textSecondary">{t('roadReports.age', { minutes: minutesSince(report.createdAt) })}</AppText>
@@ -72,7 +72,7 @@ export function RoadReportDetailsSheet({ report, visible, onClose, onUpdated }: 
         </View>
         {error && report.canVote ? <AppText color="danger" accessibilityLiveRegion="polite">{t(errorKey)}</AppText> : null}
         {report.viewerVote ? <AppText color="textSecondary" align="center">{t('roadReports.responseRecorded')}</AppText> : report.isOwnReport ? <AppText color="textSecondary" align="center">{t('roadReports.ownReport')}</AppText> : !report.canVote ? <AppText color="textSecondary" align="center">{t('roadReports.unavailable')}</AppText> : (
-          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+          <View style={{ flexDirection: row, gap: spacing.sm }}>
             <AppButton label={t('roadReports.notThere')} onPress={() => vote('reject')} loading={reject.isPending} disabled={pending} variant="danger" style={{ flex: 1 }} />
             <AppButton label={t('roadReports.stillThere')} onPress={() => vote('confirm')} loading={confirm.isPending} disabled={pending} style={{ flex: 1 }} />
           </View>

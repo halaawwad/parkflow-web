@@ -90,7 +90,8 @@ export function CityPicker({ label, value, onChange, allowAny }: {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <View style={[styles.box, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+      {/* Styled as a TextField (white, 1.5px hairline) so it sits in a form with them. */}
+      <View style={[styles.box, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1.5 }]}>
         <CityRow
           icon={<MapPin size={18} color={colors.brand} strokeWidth={2.2} />}
           label={label}

@@ -7,6 +7,7 @@ import { useParkingLayout } from '@/hooks/useParking';
 import { useLocale } from '@/hooks/useLocale';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/spacing';
+import type { ColorScheme } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import type { ParkingLayout, ParkingLayoutSpot, ParkingSpotState } from '@/types';
 
@@ -90,18 +91,8 @@ function LayoutCanvas({ layout, selectedId, onSelect }: {
 }) {
   const { colors } = useTheme();
   const { t, locale } = useLocale();
-  const stateColors: Record<ParkingSpotState, string> = {
-    available: colors.success,
-    reserved: colors.warning,
-    occupied: colors.danger,
-    out_of_service: colors.neutralText,
-  };
-  const textColors: Record<ParkingSpotState, string> = {
-    available: colors.textOnColor,
-    reserved: colors.deep,
-    occupied: colors.textOnColor,
-    out_of_service: colors.textOnColor,
-  };
+  // Soft status tints: the plan reads at a glance, and the one solid fill is the driver's choice.
+  const { fill: stateColors, ink: textColors } = spotPalette(colors);
   const markerLabel = (spot: ParkingLayoutSpot) => spot.type === 'accessible' ? '♿' : spot.type === 'ev' ? 'EV' : undefined;
 
   return <View style={[styles.canvas, { aspectRatio: layout.dimensions.width / layout.dimensions.height, backgroundColor: colors.surfaceSunken, borderColor: colors.border }]}>
@@ -119,10 +110,10 @@ function LayoutCanvas({ layout, selectedId, onSelect }: {
       const label = t('parkingLayout.spaceAccessibility', { code: spot.code, status: t(`parkingLayout.status.${spot.state}`), type: t(`parkingLayout.type.${spot.type}`) });
       return <Pressable key={spot.id} accessible accessibilityRole="button" accessibilityLabel={label}
         accessibilityState={{ disabled: !available, selected }} disabled={!available} onPress={() => onSelect(spot.id)}
-        style={{ position: 'absolute', left: pct(spot.x, layout.dimensions.width), top: pct(spot.y, layout.dimensions.height), width: pct(spot.width, layout.dimensions.width), height: pct(spot.height, layout.dimensions.height), transform: [{ rotate: `${spot.rotation}deg` }], backgroundColor: stateColors[spot.state], borderColor: selected ? colors.infoText : colors.surface, borderWidth: selected ? 3 : 1, borderRadius: 4, overflow: 'visible', alignItems: 'center', justifyContent: 'center' }}>
+        style={{ position: 'absolute', left: pct(spot.x, layout.dimensions.width), top: pct(spot.y, layout.dimensions.height), width: pct(spot.width, layout.dimensions.width), height: pct(spot.height, layout.dimensions.height), transform: [{ rotate: `${spot.rotation}deg` }], backgroundColor: selected ? colors.brand : stateColors[spot.state], borderColor: selected ? colors.brandPressed : available ? colors.brand : 'transparent', borderWidth: selected ? 2 : available ? 1 : 0, borderRadius: radius.xs, overflow: 'visible', alignItems: 'center', justifyContent: 'center' }}>
         <View style={{ transform: [{ rotate: `${-spot.rotation}deg` }], alignItems: 'center', justifyContent: 'center' }}>
-          <AppText numeric forceLtrAlign align="center" style={{ color: textColors[spot.state], fontSize: 8, lineHeight: 10, fontWeight: '700' }}>{spot.code}</AppText>
-          {markerLabel(spot) ? <AppText forceLtrAlign align="center" style={{ color: textColors[spot.state], fontSize: 8, lineHeight: 9, fontWeight: '800' }}>{markerLabel(spot)}</AppText> : null}
+          <AppText numeric forceLtrAlign align="center" weight="bold" style={{ color: selected ? colors.onBrand : textColors[spot.state], fontSize: 8, lineHeight: 10 }}>{spot.code}</AppText>
+          {markerLabel(spot) ? <AppText forceLtrAlign align="center" weight="bold" style={{ color: selected ? colors.onBrand : textColors[spot.state], fontSize: 8, lineHeight: 9 }}>{markerLabel(spot)}</AppText> : null}
         </View>
       </Pressable>;
     })}
@@ -140,19 +131,39 @@ function GateMarker({ x, y, dimensions, label, color, alignEnd = false }: { x: n
 function Legend({ layout }: { layout: ParkingLayout }) {
   const { locale, t, row } = useLocale();
   const { colors } = useTheme();
+  const { fill, ink } = spotPalette(colors);
+  const known = (id: string): id is ParkingSpotState => id in fill;
   return <View style={{ gap: spacing.sm }}>
     <AppText variant="label">{t('parkingLayout.legend')}</AppText>
     <View style={{ flexDirection: row, flexWrap: 'wrap', gap: spacing.sm }}>
       {layout.legend.statuses.map((item) => <View key={item.id} style={{ flexDirection: row, alignItems: 'center', gap: spacing.xs, minWidth: '45%' }}>
-        <View style={{ width: 13, height: 13, borderRadius: 3, backgroundColor: item.color }} />
+        {/* Swatches mirror the plan's own tints; unknown statuses keep the server's colour. */}
+        <View style={{ width: 14, height: 14, borderRadius: radius.xs - 2, backgroundColor: known(item.id) ? fill[item.id] : item.color, borderWidth: known(item.id) ? 1 : 0, borderColor: known(item.id) ? ink[item.id] : 'transparent' }} />
         <AppText variant="caption" color="textSecondary">{locale === 'ar' ? item.labelAr : item.label}</AppText>
       </View>)}
       {layout.legend.types.map((item) => <View key={item.id} style={{ flexDirection: row, alignItems: 'center', gap: spacing.xs, minWidth: '45%' }}>
-        <AppText forceLtrAlign style={{ color: colors.text, fontWeight: '800' }}>{item.marker}</AppText>
+        <AppText forceLtrAlign variant="label" style={{ color: colors.text, minWidth: 14 }}>{item.marker}</AppText>
         <AppText variant="caption" color="textSecondary">{locale === 'ar' ? item.labelAr : item.label}</AppText>
       </View>)}
     </View>
   </View>;
+}
+
+function spotPalette(colors: ColorScheme): { fill: Record<ParkingSpotState, string>; ink: Record<ParkingSpotState, string> } {
+  return {
+    fill: {
+      available: colors.brandSoft,
+      reserved: colors.warningSoft,
+      occupied: colors.dangerSoft,
+      out_of_service: colors.neutralSoft,
+    },
+    ink: {
+      available: colors.brand,
+      reserved: colors.warningText,
+      occupied: colors.dangerText,
+      out_of_service: colors.textTertiary,
+    },
+  };
 }
 
 const styles = StyleSheet.create({
