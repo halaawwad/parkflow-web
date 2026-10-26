@@ -56,7 +56,7 @@ function fitsHours(spot: HostSpotDetails, start: number, end: number) {
 
 export default function SpotDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { t, locale, dateLocale } = useLocale();
+  const { t, locale, dateLocale, row } = useLocale();
   const { data: spot, isPending, isError, error, refetch } = useSpot(id);
 
   return (
@@ -72,7 +72,7 @@ export default function SpotDetailsScreen() {
                 {formatMoney(spot.hourlyRate)}<AppText variant="body" color="textTertiary"> {t('common.perHour')}</AppText>
                 {spot.dailyRate ? <AppText variant="body" color="textSecondary">  ·  {formatMoney(spot.dailyRate)} {t('spot.perDay')}</AppText> : null}
               </AppText>
-              <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' }}>
+              <View style={{ flexDirection: row, gap: spacing.sm, flexWrap: 'wrap' }}>
                 {!spot.active ? <StatusBadge label={t('spot.paused')} tone="warning" size="sm" /> : null}
                 <StatusBadge label={spot.covered ? t('spot.covered') : t('spot.openAir')} tone="info" size="sm" />
                 {spot.vehicleSize === 'van' ? <StatusBadge label={t('spot.van')} tone="info" size="sm" /> : null}

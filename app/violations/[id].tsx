@@ -163,7 +163,10 @@ export default function ViolationDetailScreen() {
 
         {/* ---- Facts ---------------------------------------------------- */}
         <Card padding="lg" style={{ gap: spacing.md }}>
-          <DetailRow label={t('violation.reference')} value={violation.reference} />
+          {/* A long ID gets its own line instead of wrapping inside the value column. */}
+          <DetailRow label={t('violation.reference')} stacked>
+            <AppText variant="label" numeric selectable>{violation.reference}</AppText>
+          </DetailRow>
           <DetailRow
             label={t('parking.location')}
             value={locale === 'ar' ? violation.locationNameAr : violation.locationName}

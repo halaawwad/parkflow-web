@@ -58,7 +58,7 @@ function roleTone(role: Role): 'brand' | 'info' | 'warning' | 'danger' {
 
 export function AdminUsers() {
   const { colors } = useTheme();
-  const { locale, dateLocale, row } = useLocale();
+  const { locale, dateLocale, row, alignStart } = useLocale();
   const queryClient = useQueryClient();
   const currentUser = useAuthStore((state) => state.user);
   const currentUserId = currentUser?.id;
@@ -143,8 +143,16 @@ export function AdminUsers() {
       {notice ? <InlineNotice tone={notice.tone} title={notice.tone === 'success' ? (locale === 'ar' ? 'تم الحفظ' : 'Saved') : (locale === 'ar' ? 'تعذر الحفظ' : 'Unable to save')} body={notice.body} /> : null}
       {usersQuery.error && users.length ? <InlineNotice tone="danger" title={locale === 'ar' ? 'تعذر تحديث القائمة' : 'Could not refresh users'} body={errorMessage(usersQuery.error)} /> : null}
       <View style={[styles.stats, { flexDirection: row }]}>
-        <Card padding="lg" style={styles.stat}><UserRoundCheck size={18} color={colors.success} /><AppText variant="h2" numeric>{activeCount}</AppText><AppText variant="caption" color="textSecondary">{locale === 'ar' ? 'نشط' : 'Active'}</AppText></Card>
-        <Card padding="lg" style={styles.stat}><UserRoundX size={18} color={colors.danger} /><AppText variant="h2" numeric>{suspendedCount}</AppText><AppText variant="caption" color="textSecondary">{locale === 'ar' ? 'موقوف' : 'Suspended'}</AppText></Card>
+        <Card padding="md" style={styles.stat}>
+          <View style={[styles.statIcon, { alignSelf: alignStart, backgroundColor: colors.successSoft }]}><UserRoundCheck size={16} color={colors.success} /></View>
+          <AppText variant="h2" numeric>{activeCount}</AppText>
+          <AppText variant="caption" color="textSecondary">{locale === 'ar' ? 'نشط' : 'Active'}</AppText>
+        </Card>
+        <Card padding="md" style={styles.stat}>
+          <View style={[styles.statIcon, { alignSelf: alignStart, backgroundColor: colors.dangerSoft }]}><UserRoundX size={16} color={colors.danger} /></View>
+          <AppText variant="h2" numeric>{suspendedCount}</AppText>
+          <AppText variant="caption" color="textSecondary">{locale === 'ar' ? 'موقوف' : 'Suspended'}</AppText>
+        </Card>
       </View>
 
       <TextField
@@ -154,7 +162,7 @@ export function AdminUsers() {
         placeholder={locale === 'ar' ? 'الاسم أو البريد أو الهاتف' : 'Name, email, phone or ID'}
         leading={<Search size={20} color={colors.textTertiary} />}
       />
-      <AppButton label={locale === 'ar' ? 'بحث' : 'Search'} variant="secondary" size="sm" onPress={submitSearch} disabled={usersQuery.isFetching || updateUser.isPending} />
+      <AppButton label={locale === 'ar' ? 'بحث' : 'Search'} variant="secondary" size="sm" fullWidth={false} onPress={submitSearch} disabled={usersQuery.isFetching || updateUser.isPending} style={{ alignSelf: alignStart, paddingHorizontal: spacing.xl }} />
       <AppText variant="caption" color="textSecondary">{locale === 'ar' ? 'تظهر أحدث ٢٠٠ حساب مطابق كحد أقصى. استخدم البحث للعثور على الحسابات الأقدم.' : 'Up to the latest 200 matching accounts are shown. Search to find older accounts.'}</AppText>
       <AppText variant="caption" color="textSecondary">{filtered.length} {locale === 'ar' ? 'نتيجة' : 'results'}</AppText>
 
@@ -175,7 +183,7 @@ export function AdminUsers() {
                 <StatusBadge label={label(item.status, locale)} tone={item.status === 'ACTIVE' ? 'success' : 'danger'} size="sm" />
               </View>
             </View>
-            <AppButton label={own ? (locale === 'ar' ? 'حسابك' : 'Your account') : (locale === 'ar' ? 'إدارة المستخدم' : 'Manage user')} variant="secondary" size="sm" fullWidth={false} disabled={own} onPress={() => openEditor(item)} />
+            <AppButton label={own ? (locale === 'ar' ? 'حسابك' : 'Your account') : (locale === 'ar' ? 'إدارة المستخدم' : 'Manage user')} variant="ghost" size="sm" fullWidth={false} disabled={own} onPress={() => openEditor(item)} style={{ alignSelf: alignStart, paddingHorizontal: spacing.md, backgroundColor: colors.track }} />
           </Card>
         );
       })}
@@ -185,9 +193,9 @@ export function AdminUsers() {
         {selected ? step === 'edit' ? (
           <View style={styles.sheetContent}>
             <AppText variant="label" color="textSecondary">{locale === 'ar' ? 'الدور' : 'Role'}</AppText>
-            <View style={styles.choiceWrap}>{roles.map((value) => renderChoice(value, draftRole === value, () => setDraftRole(value)))}</View>
+            <View style={[styles.choiceWrap, { flexDirection: row }]}>{roles.map((value) => renderChoice(value, draftRole === value, () => setDraftRole(value)))}</View>
             <AppText variant="label" color="textSecondary" style={styles.sectionLabel}>{locale === 'ar' ? 'الحالة' : 'Status'}</AppText>
-            <View style={styles.choiceWrap}>{statuses.map((value) => renderChoice(value, draftStatus === value, () => setDraftStatus(value)))}</View>
+            <View style={[styles.choiceWrap, { flexDirection: row }]}>{statuses.map((value) => renderChoice(value, draftStatus === value, () => setDraftStatus(value)))}</View>
             {selected.id === currentUserId ? <InlineNotice tone="warning" title={locale === 'ar' ? 'لا يمكن تعديل حسابك' : 'Your account cannot be changed'} /> : null}
             {updateUser.error ? <InlineNotice tone="danger" title={locale === 'ar' ? 'تعذر الحفظ' : 'Unable to save'} body={errorMessage(updateUser.error)} /> : null}
             <AppButton label={locale === 'ar' ? 'مراجعة التغييرات' : 'Review changes'} onPress={() => setStep('review')} disabled={selected.id === currentUserId || (draftRole === selected.role && draftStatus === selected.status)} />
@@ -215,15 +223,16 @@ export default AdminUsers;
 const styles = StyleSheet.create({
   root: { gap: spacing.lg },
   loader: { marginTop: spacing.huge },
-  stats: { gap: spacing.md },
-  stat: { flex: 1, minWidth: 120, gap: spacing.xs, alignItems: 'flex-start' },
+  stats: { gap: spacing.sm },
+  stat: { flex: 1, minWidth: 120, gap: spacing.xs },
+  statIcon: { width: 32, height: 32, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xs },
   userCard: { gap: spacing.md },
   userHeading: { alignItems: 'flex-start', gap: spacing.md },
   avatar: { width: 40, height: 40, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
   userCopy: { flex: 1, gap: spacing.xs, minWidth: 0 },
   badges: { gap: spacing.xs, alignItems: 'flex-end' },
   sheetContent: { gap: spacing.md, paddingBottom: spacing.sm },
-  choiceWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  choiceWrap: { flexWrap: 'wrap', gap: spacing.sm },
   choice: { borderWidth: 1, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.md },
   sectionLabel: { marginTop: spacing.sm },
   reviewCard: { gap: spacing.md },

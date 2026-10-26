@@ -1,5 +1,5 @@
 import { Linking, View } from 'react-native';
-import { CircleHelp, Mail, MessageCircle, Phone } from 'lucide-react-native';
+import { Mail, MessageCircle, Phone } from 'lucide-react-native';
 
 import {
   AppHeader,
@@ -87,15 +87,12 @@ export default function HelpScreen() {
         </Card>
 
         <View>
-          <SectionHeader
-            title={t('profile.faq')}
-            trailing={<CircleHelp size={20} color={colors.textTertiary} strokeWidth={2.1} />}
-          />
+          <SectionHeader title={t('profile.faq')} />
           <Card padding="lg" style={{ gap: spacing.lg }}>
             {FAQ.map((n, index) => (
               <View key={n} style={{ gap: spacing.sm }}>
                 {index > 0 ? <Divider style={{ marginBottom: spacing.md }} /> : null}
-                <AppText variant="titleLg">{t(`help.faq${n}.q`)}</AppText>
+                <AppText variant="title">{t(`help.faq${n}.q`)}</AppText>
                 <AppText variant="body" color="textSecondary">
                   {t(`help.faq${n}.a`)}
                 </AppText>

@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { Linking, ScrollView, View } from 'react-native';
-import { AppButton, AppText, BottomSheet } from '@/components/ui';
+import { Linking, ScrollView } from 'react-native';
+import { BottomSheet } from '@/components/ui';
 import { useLocale } from '@/hooks/useLocale';
 import type { TourismPlace } from '@/types';
+import { spacing } from '@/theme/spacing';
+import { DetailActions, DetailCaveat, DetailList, DetailNote, type DetailRow } from './PlaceDetails';
 
 function safeUrl(value?: string): string | undefined {
   if (!value) return;
@@ -30,7 +32,7 @@ export function TourismPlaceDetailsSheet({
   onClose: () => void;
   onRoute: (place: TourismPlace) => void;
 }) {
-  const { t, locale, row, dateLocale } = useLocale();
+  const { t, locale, dateLocale } = useLocale();
   const [linkError, setLinkError] = useState(false);
   const name = place ? (locale === 'ar' ? place.nameAr : place.nameEn) : undefined;
   const description = place?.descriptionAr;
@@ -57,34 +59,27 @@ export function TourismPlaceDetailsSheet({
     [t('tourism.lastChecked'), new Date(place.sourcesCheckedOn).toLocaleDateString(dateLocale)],
   ] : [];
   return <BottomSheet visible={Boolean(place)} onClose={onClose} title={name} subtitle={t('tourism.details')}>
-    {place ? <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ gap: 12 }}>
-      {rows.filter(([, value]) => Boolean(value)).map(([label, value], index) => <View key={index} style={{ gap: 2 }}>
-        <AppText variant="caption" color="textSecondary">{label}</AppText>
-        <AppText>{value}</AppText>
-      </View>)}
-      {locationNote ? <View style={{ gap: 2 }}>
-        <AppText variant="caption" color="warningText">{t('tourism.coordinateWarning')}</AppText>
-        <AppText>{locationNote}</AppText>
-      </View> : null}
-      <AppText variant="caption" color="textSecondary">{t('tourism.entranceDisclaimer')}</AppText>
-      <AppText variant="caption" color="textSecondary">{t('tourism.disclaimer')}</AppText>
-      {linkError ? <AppText variant="caption" color="danger">{t('tourism.linkFailed')}</AppText> : null}
-      <AppButton label={t('tourism.route')} size="sm" onPress={() => onRoute(place)} />
-      <View style={{ flexDirection: row, gap: 8, flexWrap: 'wrap' }}>
-        {phone ? <AppButton label={t('tourism.call')} size="sm" variant="secondary" fullWidth={false} onPress={() => void open(`tel:${phone}`)} /> : null}
-        {website ? <AppButton label={t('tourism.website')} size="sm" variant="secondary" fullWidth={false} onPress={() => void open(website)} /> : null}
-        {sourceLinks.map((source, index) => (
-          <AppButton
-            key={`${source.url}-${index}`}
-            label={index === 0 ? t('tourism.openSource') : t('tourism.openSourceNumber', { count: index + 1 })}
-            size="sm"
-            variant="secondary"
-            fullWidth={false}
-            onPress={() => void open(source.href!)}
-          />
-        ))}
-      </View>
-      <AppButton label={t('tourism.close')} variant="ghost" size="sm" onPress={onClose} />
+    {place ? <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ gap: spacing.md }} showsVerticalScrollIndicator={false}>
+      <DetailList rows={rows as DetailRow[]} />
+      {locationNote ? <DetailCaveat title={t('tourism.coordinateWarning')} body={locationNote} /> : null}
+      <DetailNote>{t('tourism.entranceDisclaimer')}</DetailNote>
+      <DetailNote>{t('tourism.disclaimer')}</DetailNote>
+      {linkError ? <DetailNote tone="danger">{t('tourism.linkFailed')}</DetailNote> : null}
+      <DetailActions
+        routeLabel={t('tourism.route')}
+        onRoute={() => onRoute(place)}
+        links={[
+          ...(phone ? [{ key: 'call', label: t('tourism.call'), onPress: () => void open(`tel:${phone}`) }] : []),
+          ...(website ? [{ key: 'website', label: t('tourism.website'), onPress: () => void open(website) }] : []),
+          ...sourceLinks.map((source, index) => ({
+            key: `${source.url}-${index}`,
+            label: index === 0 ? t('tourism.openSource') : t('tourism.openSourceNumber', { count: index + 1 }),
+            onPress: () => void open(source.href!),
+          })),
+        ]}
+        closeLabel={t('tourism.close')}
+        onClose={onClose}
+      />
     </ScrollView> : null}
   </BottomSheet>;
 }

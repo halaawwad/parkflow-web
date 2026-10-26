@@ -29,7 +29,7 @@ function parseZoneCode(data: string): string {
 export default function ScanScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { t } = useLocale();
+  const { t, row } = useLocale();
   const [permission, requestPermission] = useCameraPermissions();
 
   // The camera reports the same code many times a second; handle it once.
@@ -125,8 +125,8 @@ export default function ScanScreen() {
           ) : null}
         </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-          <QrCode size={22} color={colors.textSecondary} strokeWidth={2.1} />
+        <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm + 2 }}>
+          <QrCode size={18} color={colors.textTertiary} strokeWidth={2.1} />
           <AppText variant="bodySm" color="textSecondary" style={{ flex: 1 }}>
             {t('scan.hint')}
           </AppText>

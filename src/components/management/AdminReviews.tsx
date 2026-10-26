@@ -323,10 +323,10 @@ export function AdminReviews({ kind }: AdminReviewsProps) {
       {kind === 'reports' ? <CheckpointReview /> : null}
       <View style={{ flexDirection: row, alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
         <View style={{ flex: 1, gap: spacing.xs }}>
-          <AppText variant="h2">{kind === 'reports' ? labels.reports : labels.appeals}</AppText>
+          <AppText variant="h3">{kind === 'reports' ? labels.reports : labels.appeals}</AppText>
           <AppText variant="caption" color="textSecondary">{items.length}</AppText>
         </View>
-        <AppButton label={labels.refresh} variant="ghost" size="sm" fullWidth={false} onPress={() => void query.refetch()} loading={query.isFetching} />
+        <AppButton label={labels.refresh} variant="ghost" size="sm" fullWidth={false} onPress={() => void query.refetch()} loading={query.isFetching} style={{ paddingHorizontal: spacing.md, backgroundColor: colors.track }} />
       </View>
 
       <SearchField

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { ScrollView, View, type StyleProp, type ViewStyle } from 'react-native';
 import { AppText } from './AppText';
 import { PressableScale } from './PressableScale';
@@ -31,13 +32,34 @@ export function Segmented<T extends string>({
   style,
 }: SegmentedProps<T>) {
   const { colors } = useTheme();
-  const { row } = useLocale();
+  const { row, isRTL } = useLocale();
+  const scrollRef = useRef<ScrollView>(null);
+  // Where each pill sits in the scroll row, so the selected one can be brought into view.
+  const pillX = useRef<Record<string, { x: number; width: number }>>({});
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const revealSelected = () => {
+    const pill = pillX.current[value];
+    if (!pill || !viewportWidth) {
+      // RTL rows are laid out from the right edge, but scrolling starts at the left.
+      if (isRTL) scrollRef.current?.scrollToEnd({ animated: false });
+      return;
+    }
+    const centred = pill.x + pill.width / 2 - viewportWidth / 2;
+    scrollRef.current?.scrollTo({ x: Math.max(0, centred), animated: false });
+  };
+  // Only when the selection or the row's width changes, so a user's own scrolling is left alone.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(revealSelected, [value, viewportWidth]);
 
   const items = options.map((option) => {
     const active = option.value === value;
     return (
       <PressableScale
         key={option.value}
+        onLayout={variant === 'inset' ? undefined : (event) => {
+          pillX.current[option.value] = { x: event.nativeEvent.layout.x, width: event.nativeEvent.layout.width };
+          if (option.value === value) revealSelected();
+        }}
         onPress={() => onChange(option.value)}
         haptic="select"
         scaleTo={0.96}
@@ -55,11 +77,14 @@ export function Segmented<T extends string>({
           borderRadius: variant === 'inset' ? radius.sm : radius.pill,
           // The selected inset segment is a raised chip on the track.
           ...(active && variant === 'inset' ? shadow.xs : null),
+          // Inactive pills sit on the recessed track so they read as controls, not loose text.
           backgroundColor: active
             ? variant === 'inset'
               ? colors.surface
               : colors.brandSoft
-            : 'transparent',
+            : variant === 'inset'
+              ? 'transparent'
+              : colors.track,
         }}
       >
         <AppText
@@ -109,10 +134,14 @@ export function Segmented<T extends string>({
 
   return (
     <ScrollView
+      ref={scrollRef}
       horizontal
       showsHorizontalScrollIndicator={false}
-      style={style}
+      // Without flexGrow 0 a horizontal row stretches to fill a vertical scroll container.
+      style={[{ flexGrow: 0 }, style]}
       contentContainerStyle={{ flexDirection: row, gap: spacing.sm }}
+      onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)}
+      onContentSizeChange={revealSelected}
     >
       {items}
     </ScrollView>

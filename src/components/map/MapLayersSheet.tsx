@@ -126,12 +126,10 @@ export function MapLayersSheet({ visible, onClose }: { visible: boolean; onClose
               {CAR_SERVICE_CATEGORIES.map((category: CarServiceCategory) => {
                 const active = carServiceCategory === category;
                 return (
-                  <AppButton
+                  <FilterChip
                     key={category}
                     label={t(`carServices.category.${category}`)}
-                    size="sm"
-                    fullWidth={false}
-                    variant={active ? 'primary' : 'secondary'}
+                    active={active}
                     onPress={() => setCarServiceCategory(category)}
                   />
                 );
@@ -143,12 +141,10 @@ export function MapLayersSheet({ visible, onClose }: { visible: boolean; onClose
               {TOURISM_PLACE_CATEGORIES.map((category: TourismPlaceCategory) => {
                 const active = tourismPlaceCategories.includes(category);
                 return (
-                  <AppButton
+                  <FilterChip
                     key={category}
                     label={t(`tourism.category.${category}`)}
-                    size="sm"
-                    fullWidth={false}
-                    variant={active ? 'primary' : 'secondary'}
+                    active={active}
                     onPress={() => toggleTourismPlaceCategory(category)}
                   />
                 );
@@ -170,5 +166,36 @@ export function MapLayersSheet({ visible, onClose }: { visible: boolean; onClose
         <AppButton label={t('common.close')} onPress={onClose} variant="secondary" size="sm" />
       </View>
     </BottomSheet>
+  );
+}
+
+/**
+ * A secondary filter under a category tile: same selected language as the
+ * tiles (brand tint + brand hairline), one size down, so it reads as a refinement.
+ */
+function FilterChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <PressableScale
+      onPress={onPress}
+      haptic="select"
+      scaleTo={0.96}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: active }}
+      style={{
+        minHeight: 38,
+        justifyContent: 'center',
+        paddingHorizontal: spacing.md + 2,
+        borderRadius: radius.pill,
+        borderWidth: 1,
+        borderColor: active ? colors.brand : colors.border,
+        backgroundColor: active ? colors.brandSoft : colors.surface,
+      }}
+    >
+      <AppText variant="label" weight={active ? 'semibold' : 'medium'} style={{ color: active ? colors.successText : colors.textSecondary }}>
+        {label}
+      </AppText>
+    </PressableScale>
   );
 }

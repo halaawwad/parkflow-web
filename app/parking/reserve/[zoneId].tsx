@@ -23,6 +23,7 @@ import { formatMoney, formatRate } from '@/utils/money';
 import { formatDate, formatDurationShort, formatTime } from '@/utils/time';
 import { errorMessage } from '@/utils/errors';
 import { haptics } from '@/utils/haptics';
+import { StepperRow } from '@/components/domain/StepperRow';
 
 const HALF_HOUR = 30 * 60_000;
 const nextHalfHour = () => Math.ceil((Date.now() + 60_000) / HALF_HOUR) * HALF_HOUR;
@@ -116,16 +117,10 @@ export default function ReserveParkingScreen() {
   );
 }
 
-function PickerRow({ icon, label, value, row, onMinus, onPlus, minusDisabled, plusDisabled }: {
+/** The shared stepper; `row` is accepted for the existing call sites, StepperRow mirrors itself. */
+function PickerRow({ icon, label, value, onMinus, onPlus, minusDisabled, plusDisabled }: {
   icon: React.ReactNode; label: string; value: string; row: 'row' | 'row-reverse';
   onMinus: () => void; onPlus: () => void; minusDisabled?: boolean; plusDisabled?: boolean;
 }) {
-  return <View style={{ gap: spacing.sm }}>
-    <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm }}>{icon}<AppText variant="label" color="textSecondary">{label}</AppText></View>
-    <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm }}>
-      <AppButton label="−" size="sm" variant="secondary" fullWidth={false} onPress={onMinus} disabled={minusDisabled} style={{ width: 52 }} />
-      <AppText variant="titleLg" numeric align="center" style={{ flex: 1 }}>{value}</AppText>
-      <AppButton label="+" size="sm" variant="secondary" fullWidth={false} onPress={onPlus} disabled={plusDisabled} style={{ width: 52 }} />
-    </View>
-  </View>;
+  return <StepperRow icon={icon} label={label} value={value} onMinus={onMinus} onPlus={onPlus} minusDisabled={minusDisabled} plusDisabled={plusDisabled} />;
 }

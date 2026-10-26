@@ -124,29 +124,30 @@ export default function VehicleDetailScreen() {
           <AppButton
             label={t('warning.entry')}
             size="sm"
-            variant="secondary"
+            variant="ghost"
             fullWidth={false}
-            style={{ alignSelf: 'center' }}
-            icon={<ShieldAlert size={16} color={colors.text} strokeWidth={2.2} />}
+            // Same flat header chip as the Vehicles tab.
+            style={{ alignSelf: 'center', paddingHorizontal: spacing.md, backgroundColor: colors.track }}
+            icon={<ShieldAlert size={16} color={colors.textSecondary} strokeWidth={2.2} />}
             onPress={() => router.push({ pathname: '/vehicles/warning-check', params: { vehicleId: id } })}
           />
         }
       />
 
-      <View style={{ gap: spacing.xl }}>
+      <View style={{ gap: spacing.lg }}>
         {/* ---- Identity ------------------------------------------------ */}
-        <Card padding="xl" style={{ alignItems: 'center', gap: spacing.md }}>
+        <Card padding="lg" style={{ alignItems: 'center', gap: spacing.sm + 2 }}>
           <View
             style={{
-              width: 96,
-              height: 96,
-              borderRadius: radius.xxl,
+              width: 64,
+              height: 64,
+              borderRadius: radius.xl,
               alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: colors.brandSofter,
             }}
           >
-            <Icon size={44} color={colors.brand} strokeWidth={1.8} />
+            <Icon size={30} color={colors.brand} strokeWidth={1.9} />
           </View>
 
           <AppText variant="h2" align="center">

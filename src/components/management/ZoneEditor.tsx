@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View } from 'react-native';
+import { StyleSheet, Switch, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppButton, AppText, BottomSheet, Card, InlineNotice, Segmented, SwitchRow, TextField } from '@/components/ui';
 import { managementService } from '@/services/http/managementService';
@@ -7,11 +7,12 @@ import type { Availability, ManagementZone } from '@/types/management';
 import { useAuthStore } from '@/store/authStore';
 import { useLocale } from '@/hooks/useLocale';
 import { spacing } from '@/theme/spacing';
+import { useTheme } from '@/theme/ThemeProvider';
 import { errorMessage } from '@/utils/errors';
 
 /** Restricted to existing zone fields and APIs; no schema or login migration. */
 export function ZoneEditor({zone,onClose}:{zone:ManagementZone;onClose:()=>void}) {
-  const {locale,row}=useLocale(); const ar=locale==='ar';
+  const {locale,row}=useLocale(); const {colors}=useTheme(); const ar=locale==='ar';
   const user=useAuthStore(s=>s.user); const client=useQueryClient();
   const [name,setName]=useState(zone.name); const [nameAr,setNameAr]=useState(zone.nameAr);
   const [capacity,setCapacity]=useState(String(zone.capacity??'')); const [active,setActive]=useState(zone.active);
@@ -36,7 +37,8 @@ export function ZoneEditor({zone,onClose}:{zone:ManagementZone;onClose:()=>void}
     return managementService.saveTariff(zone.id,{name:ar?'تحديث التعرفة':'Rate update',hourlyRate:Math.round(value*100),incrementMinutes:current?.incrementMinutes??Number(increment),freeMinutes:current?.freeMinutes??Number(free),minimumCharge:current?.minimumCharge??Math.round(Number(minimum)*100),...(current?.dailyCap!=null?{dailyCap:current.dailyCap}:{}),...(current?.maxStayMinutes!=null?{maxStayMinutes:current.maxStayMinutes}:{}),validFrom:new Date().toISOString()});
   },onMutate:()=>setNotice(''),onSuccess:()=>{setNotice(ar?'تم الحفظ.':'Saved.');for(const key of ['management','admin','zones','zone'])void client.invalidateQueries({queryKey:[key]});}});
   const canManage=zone.canManageZone !== false;
-  const button=(label:string,action:'details'|'availability'|'hours'|'tariff')=><AppButton label={label} loading={mutate.isPending&&mutate.variables===action} disabled={mutate.isPending} onPress={()=>mutate.mutate(action)}/>;
+  // Each section commits on its own, so its save is tonal: clear, without four equal primaries in one sheet.
+  const button=(label:string,action:'details'|'availability'|'hours'|'tariff')=><AppButton variant="tonal" label={label} loading={mutate.isPending&&mutate.variables===action} disabled={mutate.isPending} onPress={()=>mutate.mutate(action)}/>;
   return <BottomSheet visible onClose={()=>{if(!mutate.isPending)onClose();}} title={ar?zone.nameAr:zone.name} scrollable>
     <View style={{gap:spacing.lg}}>
       {mutate.error?<InlineNotice tone="danger" title={ar?'تعذر الحفظ':'Unable to save'} body={errorMessage(mutate.error)}/>:null}
@@ -48,7 +50,7 @@ export function ZoneEditor({zone,onClose}:{zone:ManagementZone;onClose:()=>void}
       <SwitchRow label={ar?'الموقف نشط':'Active zone'} value={active} onValueChange={setActive}/>
       {button(ar?'حفظ التفاصيل':'Save details','details')}
       </> : <AppText color="textSecondary">{zone.code} · {zone.capacity??'—'}</AppText>}
-      {canManage || zone.canUpdateAvailability ? <Card style={{gap:spacing.md}}><AppText variant="title">{ar?'تحديث التوفر':'Update availability'}</AppText><Segmented value={availability} onChange={setAvailability} options={[
+      {canManage || zone.canUpdateAvailability ? <Card style={{gap:spacing.md}}><AppText variant="title">{ar?'تحديث التوفر':'Update availability'}</AppText><Segmented variant="inset" value={availability} onChange={setAvailability} options={[
         {value:'available',label:ar?'متاح':'Available'},{value:'limited',label:ar?'محدود':'Limited'},{value:'full',label:ar?'ممتلئ':'Full'},{value:'unknown',label:ar?'غير معروف':'Unknown'},
       ]}/>{button(ar?'نشر التوفر':'Publish availability','availability')}</Card> : null}
       {canManage ? <>
@@ -64,8 +66,20 @@ export function ZoneEditor({zone,onClose}:{zone:ManagementZone;onClose:()=>void}
       </Card>
       {hours.length===7?<Card style={{gap:spacing.md}}><AppText variant="title">{ar?'ساعات العمل':'Operating hours'}</AppText>
         {hours.map((h,i)=><View key={h.weekday} style={{gap:spacing.sm}}>
-          <AppText variant="label">{(ar?['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت']:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'])[h.weekday]}</AppText>
-          <SwitchRow label={ar?'مغلق':'Closed'} value={h.closed} onValueChange={closed=>setHours(list=>list.map((x,j)=>j===i?{...x,closed}:x))}/>
+          {/* Day and its Closed switch share one line; the times follow. */}
+          <View style={{flexDirection:row,alignItems:'center',gap:spacing.sm,paddingTop:i===0?0:spacing.sm,borderTopWidth:i===0?0:StyleSheet.hairlineWidth*2,borderTopColor:colors.divider}}>
+            <AppText variant="title" style={{flex:1}}>{(ar?['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت']:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'])[h.weekday]}</AppText>
+            <AppText variant="caption" color="textSecondary">{ar?'مغلق':'Closed'}</AppText>
+            <Switch
+              value={h.closed}
+              onValueChange={closed=>setHours(list=>list.map((x,j)=>j===i?{...x,closed}:x))}
+              trackColor={{false:colors.borderStrong,true:colors.brand}}
+              thumbColor={colors.surface}
+              ios_backgroundColor={colors.borderStrong}
+              {...({activeThumbColor:colors.surface} as object)}
+              accessibilityLabel={`${(ar?['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت']:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'])[h.weekday]}: ${ar?'مغلق':'Closed'}`}
+            />
+          </View>
           <View style={{flexDirection:row,gap:spacing.md}}>
             <View style={{flex:1}}><TextField label={ar?'يفتح HH:mm':'Opens HH:mm'} value={h.opensAt} maxLength={5} onChangeText={opensAt=>setHours(list=>list.map((x,j)=>j===i?{...x,opensAt}:x))}/></View>
             <View style={{flex:1}}><TextField label={ar?'يغلق HH:mm':'Closes HH:mm'} value={h.closesAt} maxLength={5} onChangeText={closesAt=>setHours(list=>list.map((x,j)=>j===i?{...x,closesAt}:x))}/></View>

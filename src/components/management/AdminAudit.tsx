@@ -113,10 +113,10 @@ export function AdminAudit() {
     <View style={{ gap: spacing.lg }}>
       <View style={{ flexDirection: row, justifyContent: 'space-between', alignItems: 'center', gap: spacing.md }}>
         <View style={{ flex: 1, gap: spacing.xs }}>
-          <AppText variant="h2">{labels.title}</AppText>
+          <AppText variant="h3">{labels.title}</AppText>
           <AppText variant="caption" color="textSecondary">{labels.subtitle}</AppText>
         </View>
-        <AppButton label={labels.refresh} variant="ghost" size="sm" fullWidth={false} onPress={() => void query.refetch()} loading={query.isFetching} />
+        <AppButton label={labels.refresh} variant="ghost" size="sm" fullWidth={false} onPress={() => void query.refetch()} loading={query.isFetching} style={{ paddingHorizontal: spacing.md, backgroundColor: colors.track }} />
       </View>
 
       <SearchField value={search} onChangeText={(value) => { setSearch(value); setShowAll(false); }} placeholder={labels.search} />

@@ -32,7 +32,7 @@ export default function SmartGateScreen() {
   useEffect(() => { if (!zoneId && zones.data?.length === 1) setZoneId(zones.data[0].id); }, [zoneId, zones.data]);
 
   return (
-    <Screen bottomInset={spacing.giant} scrollProps={{
+    <Screen safeTop={false} bottomInset={spacing.giant} scrollProps={{
       refreshControl: <RefreshControl refreshing={visits.isRefetching || occupancy.isRefetching} tintColor={colors.brand}
         onRefresh={() => { void visits.refetch(); void occupancy.refetch(); }} />,
     }}>

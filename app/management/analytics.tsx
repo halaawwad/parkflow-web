@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTheme } from '@/theme/ThemeProvider';
 import { View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { AppButton, AppHeader, AppText, Card, EmptyState, ErrorState, Screen, Segmented, SkeletonGroup } from '@/components/ui';
@@ -11,14 +12,14 @@ import { formatDateTime } from '@/utils/time';
 
 /** Adapted from Abdelrahman's operator analytics, using current data contracts. */
 export default function OperatorAnalytics(){
-  const {locale,dateLocale,row}=useLocale();const ar=locale==='ar';const user=useAuthStore(s=>s.user);
+  const {locale,dateLocale,row}=useLocale();const {colors}=useTheme();const ar=locale==='ar';const user=useAuthStore(s=>s.user);
   const access=useManagementAccess();const [period,setPeriod]=useState<'7'|'30'|'90'>('30');
   const analytics=useQuery({queryKey:['management','analytics',user?.id,period],queryFn:()=>managementService.analytics(Number(period)),enabled:Boolean(access.data?.canViewAnalytics)});
-  if(access.isPending)return <Screen><SkeletonGroup count={2}/></Screen>;
-  if(access.error)return <Screen><ErrorState error={access.error} onRetry={()=>void access.refetch()}/></Screen>;
-  if(!access.data?.canViewAnalytics)return <Screen><AppText>{ar?'لا تملك صلاحية عرض التحليلات.':'Analytics permission required.'}</AppText></Screen>;
-  return <Screen contentContainerStyle={{gap:spacing.lg}}>
-    <AppHeader title={ar?'تحليلات المواقف':'Parking analytics'} trailing={<AppButton label={ar?'تحديث':'Refresh'} variant="secondary" size="sm" fullWidth={false} loading={analytics.isFetching} onPress={()=>void analytics.refetch()}/>}/>
+  if(access.isPending)return <Screen safeTop={false}><SkeletonGroup count={2}/></Screen>;
+  if(access.error)return <Screen safeTop={false}><ErrorState error={access.error} onRetry={()=>void access.refetch()}/></Screen>;
+  if(!access.data?.canViewAnalytics)return <Screen safeTop={false}><AppText>{ar?'لا تملك صلاحية عرض التحليلات.':'Analytics permission required.'}</AppText></Screen>;
+  return <Screen safeTop={false} contentContainerStyle={{gap:spacing.lg}}>
+    <AppHeader title={ar?'تحليلات المواقف':'Parking analytics'} trailing={<AppButton label={ar?'تحديث':'Refresh'} variant="ghost" style={{ paddingHorizontal: spacing.md, backgroundColor: colors.track }} size="sm" fullWidth={false} loading={analytics.isFetching} onPress={()=>void analytics.refetch()}/>}/>
     <Segmented variant="inset" value={period} onChange={setPeriod} options={['7','30','90'].map(value=>({value:value as '7'|'30'|'90',label:ar?`آخر ${value} يوم`:`Last ${value} days`}))}/>
     <AppText variant="caption" color="textSecondary">{ar?'الحجوزات المنشأة خلال الفترة، وآخر إشغال مسجّل. غياب بيانات الإشغال يظهر كغير متوفر.':'Reservations created during the period and the latest recorded occupancy. Missing occupancy is shown as unavailable.'}</AppText>
     {analytics.isPending?<SkeletonGroup count={2}/>:analytics.error?<ErrorState error={analytics.error} onRetry={()=>void analytics.refetch()}/>:analytics.data.zones.length===0?<EmptyState title={ar?'لا توجد مواقف متاحة للتحليل.':'No assigned zones available for analytics.'}/>:<View style={{gap:spacing.lg}}>
