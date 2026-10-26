@@ -12,11 +12,11 @@ export const freshnessMs = env.CHECKPOINT_FRESHNESS_MINUTES * 60_000;
 export function directionsOf(_cp: RoadCheckpoint): Direction[] {
   return checkpointPassages;
 }
-function aggregate(rows: CheckpointReport[], now: number) {
+function aggregate(rows: CheckpointReport[], now: number, persistentSample = false) {
   // A person contributes only their newest observation; no majority or latest-report winner.
   const people = new Map<string, CheckpointReport>();
   for (const r of [...rows].sort((a,b) => b.observedAt.getTime()-a.observedAt.getTime() || b.reportedAt.getTime()-a.reportedAt.getTime() || a.id.localeCompare(b.id))) {
-    if (r.observedAt.getTime() <= now && r.observedAt.getTime() + freshnessMs > now && !people.has(r.userId)) people.set(r.userId,r);
+    if (r.observedAt.getTime() <= now && (persistentSample || r.observedAt.getTime() + freshnessMs > now) && !people.has(r.userId)) people.set(r.userId,r);
   }
   const fresh = [...people.values()];
   const statuses = new Set(fresh.map(r=>r.status));
@@ -27,13 +27,29 @@ function aggregate(rows: CheckpointReport[], now: number) {
     lastObservedAt: fresh[0]?.observedAt.toISOString() ?? null,
     // Only expose report IDs, never reporters or submitted positions.
     reports: fresh.map(r=>({id:r.id,isConfirmation:!!r.parentId,status:r.status,note:r.note,observedAt:r.observedAt.toISOString(),locationVerified:r.locationVerified})),
-    expiresAt: fresh.length ? new Date(Math.min(...fresh.map(r=>r.observedAt.getTime()+freshnessMs))).toISOString() : null };
+    expiresAt: fresh.length && !persistentSample ? new Date(Math.min(...fresh.map(r=>r.observedAt.getTime()+freshnessMs))).toISOString() : null };
 }
 export async function checkpoints() {
   const now = Date.now();
-  const rows = await db.roadCheckpoint.findMany({where:{active:true,enabledForLiveReporting:true},include:{reports:{where:{hidden:false,directionId:{in:checkpointPassages.map(p=>p.id)},observedAt:{gt:new Date(now-freshnessMs)},OR:[{parentId:null},{parent:{hidden:false}}]}}}});
+  // Only the development samples persist. Fresh driver observations take precedence.
+  const sampleUser = env.NODE_ENV === 'development'
+    ? await db.user.findUnique({where:{email:'checkpoint-demo@parkflow.local'},select:{id:true}})
+    : null;
+  const rows = await db.roadCheckpoint.findMany({where:{active:true,enabledForLiveReporting:true},include:{reports:{where:{
+    hidden:false,directionId:{in:checkpointPassages.map(p=>p.id)},
+    AND:[
+      {OR:[{observedAt:{gt:new Date(now-freshnessMs)}},...(sampleUser?[{userId:sampleUser.id,id:{startsWith:'demo-checkpoint-'}}]:[])]},
+      {OR:[{parentId:null},{parent:{hidden:false}}]},
+    ],
+  }}}});
   return rows.map(cp=>{
-    const directions = directionsOf(cp).map(d=>({...d,...aggregate(cp.reports.filter(r=>r.directionId===d.id && (!cp.reviewedAt || r.observedAt>=cp.reviewedAt)),now)}));
+    const directions = directionsOf(cp).map(d=>{
+      const reports = cp.reports.filter(r=>r.directionId===d.id && (!cp.reviewedAt || r.observedAt>=cp.reviewedAt));
+      const isSample = (r:CheckpointReport) => !!sampleUser && r.userId===sampleUser.id && r.id.startsWith('demo-checkpoint-');
+      const freshReports = reports.filter(r=>!isSample(r) && r.observedAt.getTime()<=now && r.observedAt.getTime()+freshnessMs>now);
+      const persistentSample = !!sampleUser && !freshReports.length;
+      return {...d,...aggregate(persistentSample ? reports.filter(isSample) : freshReports,now,persistentSample)};
+    });
     const states = new Set(directions.map(d=>d.status));
     const status = states.size === 1 ? directions[0].status : directions.some(d=>d.status==='conflicting') ? 'conflicting' as const : 'unknown' as const;
     const confirmed = directions.length > 0 && directions.every(d=>d.confidence==='confirmed') && states.size===1;
