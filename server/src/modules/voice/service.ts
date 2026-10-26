@@ -67,12 +67,30 @@ const rateLimited = () => new ApiError(429, 'VOICE_RATE_LIMITED', 'The navigatio
 
 // ---- Model quota: queue and cooldown ---------------------------------------
 
-let cooldownUntil = 0;
+/**
+ * Voice models in order of preference. Each model has its own quota, so when
+ * the primary's is spent the next one keeps the natural voice going in the
+ * same prebuilt voice instead of falling back to the device.
+ */
+const models = () => [
+  ...new Set([env.GEMINI_TTS_MODEL, ...env.GEMINI_TTS_FALLBACK_MODELS.split(',').map((model) => model.trim()).filter(Boolean)]),
+];
+/** Model → time it may be asked again. */
+const cooldowns = new Map<string, number>();
+const cooling = (model: string) => (cooldowns.get(model) ?? 0) > Date.now();
+const allCooling = () => models().every(cooling);
+/** A spent daily quota will not come back in two minutes; stop asking for a while. */
+const DAILY_COOLDOWN_MS = 15 * 60_000;
+/** A model that is gone or refuses the request (retired, no access) is skipped for hours. */
+const UNAVAILABLE_COOLDOWN_MS = 6 * 60 * 60_000;
+const PROVIDER_ERROR_COOLDOWN_MS = 30_000;
+
 let active = 0;
 const waiting: { priority: VoicePriority; start: () => void; reject: (error: unknown) => void }[] = [];
 
 /** How long Google asked us to wait: Retry-After, or the RetryInfo delay in the error body. */
 function cooldownFrom(headers: Headers | undefined, body: unknown): number {
+  if (/PerDay/i.test(JSON.stringify(body ?? ''))) return DAILY_COOLDOWN_MS;
   const header = Number(headers?.get?.('retry-after'));
   if (Number.isFinite(header) && header > 0) return Math.min(header * 1000, MAX_COOLDOWN_MS);
   const delay = JSON.stringify(body ?? '').match(/"retryDelay":"(\d+(?:\.\d+)?)s"/)?.[1];
@@ -90,14 +108,14 @@ function pump() {
 
 /** Runs a model call when a slot is free; a waiting driver's sentence jumps the look-ahead queue. */
 function schedule<T>(priority: VoicePriority, task: () => Promise<T>): Promise<T> {
-  if (Date.now() < cooldownUntil) return Promise.reject(rateLimited());
+  if (allCooling()) return Promise.reject(rateLimited());
   return new Promise<T>((resolve, reject) => {
     waiting.push({
       priority,
       reject,
       start: () => {
         // The quota may have run out while this one waited.
-        if (Date.now() < cooldownUntil) return reject(rateLimited());
+        if (allCooling()) return reject(rateLimited());
         active++;
         task().then(resolve, reject).finally(() => {
           active--;
@@ -109,10 +127,10 @@ function schedule<T>(priority: VoicePriority, task: () => Promise<T>): Promise<T
   });
 }
 
-function startCooldown(ms: number) {
-  cooldownUntil = Date.now() + ms;
-  // Everything still queued would only spend the next minute's quota on 429s.
-  for (const job of waiting.splice(0)) job.reject(rateLimited());
+function startCooldown(model: string, ms: number) {
+  cooldowns.set(model, Date.now() + ms);
+  // With every model resting, everything still queued would only collect 429s.
+  if (allCooling()) for (const job of waiting.splice(0)) job.reject(rateLimited());
 }
 
 // ---- Synthesis ---------------------------------------------------------------
@@ -127,10 +145,35 @@ function toWav(bytes: Buffer, mimeType: string): Buffer {
   return pcmToWav(trimmed.pcm, trimmed.sampleRate);
 }
 
+/** Thrown inside synthesis when one model is resting or refused; the next model is tried. */
+class ModelUnavailable extends Error {
+  constructor(readonly rateLimited: boolean) {
+    super('model unavailable');
+  }
+}
+
+/** Speaks the sentence with the first model that has quota left. */
 async function synthesize(text: string): Promise<Buffer> {
+  let limited = false;
+  for (const model of models()) {
+    if (cooling(model)) {
+      limited = true;
+      continue;
+    }
+    try {
+      return await synthesizeWith(model, text);
+    } catch (error) {
+      if (!(error instanceof ModelUnavailable)) throw error;
+      limited ||= error.rateLimited;
+    }
+  }
+  throw limited ? rateLimited() : new ApiError(503, 'VOICE_PROVIDER_UNAVAILABLE', 'The navigation voice is temporarily unavailable');
+}
+
+async function synthesizeWith(model: string, text: string): Promise<Buffer> {
   let raw: unknown;
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_TTS_MODEL}:generateContent`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey()! },
       signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -143,13 +186,17 @@ async function synthesize(text: string): Promise<Buffer> {
       }),
     });
     if (response.status === 429) {
-      startCooldown(cooldownFrom(response.headers, await response.json().catch(() => undefined)));
-      throw rateLimited();
+      startCooldown(model, cooldownFrom(response.headers, await response.json().catch(() => undefined)));
+      throw new ModelUnavailable(true);
     }
-    if (!response.ok) throw new ApiError(503, 'VOICE_PROVIDER_UNAVAILABLE', 'The navigation voice is temporarily unavailable');
+    if (!response.ok) {
+      // 400/403/404: retired model or no access — skip it for hours. 5xx: a brief rest.
+      startCooldown(model, response.status >= 500 ? PROVIDER_ERROR_COOLDOWN_MS : UNAVAILABLE_COOLDOWN_MS);
+      throw new ModelUnavailable(false);
+    }
     raw = await response.json();
   } catch (error) {
-    if (error instanceof ApiError) throw error;
+    if (error instanceof ApiError || error instanceof ModelUnavailable) throw error;
     throw new ApiError(504, 'VOICE_TIMEOUT', 'The navigation voice timed out');
   }
   const parsed = envelopeSchema.safeParse(raw);
@@ -188,7 +235,8 @@ function remember(key: string, result: SpokenAudio) {
 
 export async function speak(text: string, locale: VoiceLocale, priority: VoicePriority = 'soon'): Promise<SpokenAudio> {
   if (!apiKey()) throw new ApiError(503, 'VOICE_NOT_CONFIGURED', 'The navigation voice is not configured');
-  const key = createHash('sha256').update(`${env.GEMINI_TTS_MODEL}|${env.GEMINI_TTS_VOICE}|${locale}|${text}`).digest('hex');
+  // The model is not part of the key: a sentence spoken by any model in the chain is reused.
+  const key = createHash('sha256').update(`${env.GEMINI_TTS_VOICE}|${locale}|${text}`).digest('hex');
 
   const hit = memory.get(key);
   if (hit) {
@@ -222,7 +270,7 @@ export function clearVoiceCache() {
   inFlight.clear();
   waiting.splice(0);
   active = 0;
-  cooldownUntil = 0;
+  cooldowns.clear();
 }
 
 /** Test hook: empty the shared store. */

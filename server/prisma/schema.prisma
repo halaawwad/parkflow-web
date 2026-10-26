@@ -1330,7 +1330,7 @@ model OperatorStaff {
 /// A navigation sentence already spoken by the voice model, kept so each
 /// sentence is synthesised once for every driver instead of once per trip.
 model VoiceClip {
-  /// sha256 of model, voice, locale and text.
+  /// sha256 of voice, locale and text (any model in the chain may have spoken it).
   key       String   @id
   mimeType  String
   audio     Bytes
