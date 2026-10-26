@@ -42,7 +42,7 @@ const loop = (name: CSSAnimationProperties['animationName'], duration: number, a
 export default function WelcomeExperience() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { height, width } = useWindowDimensions();
+  const { height } = useWindowDimensions();
   const { t, row } = useLocale();
   const instant = useInstantMotion();
   const setUser = useAuthStore((state) => state.setUser);
@@ -65,8 +65,6 @@ export default function WelcomeExperience() {
   });
 
   const compact = height < 760;
-  const contentWidth = Math.min(width - 32, 510);
-
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
@@ -94,7 +92,7 @@ export default function WelcomeExperience() {
       </Animated.View>
 
       <ScrollView contentContainerStyle={[styles.scroll, { minHeight: height, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 18 }]} showsVerticalScrollIndicator={false} bounces={false}>
-        <View style={[styles.content, { width: contentWidth }]}>
+        <View style={styles.content}>
           <Reveal delay={80} duration={680} offset={24} style={styles.hero}>
             <Animated.View style={[styles.logoUniverse, !instant && loop(float, 2800)]}>
               <Animated.View style={[styles.logoHalo, !instant && loop(breathe, 2500)]} />
@@ -116,10 +114,8 @@ export default function WelcomeExperience() {
             <View style={styles.routeTop}>
               <View style={styles.routePin}><MapPin size={16} color="#06261E" strokeWidth={2.4} /></View>
               <View style={{ flex: 1 }}>
-                <AppText variant="caption" style={styles.mutedCaps}>SMART MATCH</AppText>
-                <AppText variant="title" color="onDeep">أقرب موقف مناسب إلك</AppText>
+                <AppText variant="title" color="onDeep" align="right">أقرب موقف مناسب إلك</AppText>
               </View>
-              <View style={styles.timePill}><AppText variant="caption" numeric style={styles.timeText}>2 MIN</AppText></View>
             </View>
             <View style={styles.routeRail}>
               <View style={styles.routeBase} />
@@ -154,13 +150,13 @@ export default function WelcomeExperience() {
 }
 
 function Metric({ number, icon, label }: { number: string; icon: React.ReactNode; label: string }) {
-  return <View style={styles.metric}><View style={styles.metricHead}>{icon}<AppText variant="caption" numeric style={styles.metricNumber}>{number}</AppText></View><AppText variant="caption" color="onDeep" numberOfLines={2} style={styles.metricLabel}>{label}</AppText></View>;
+  return <View style={styles.metric}><AppText variant="caption" numeric style={styles.metricNumber}>{number}</AppText>{icon}<AppText variant="bodySm" color="onDeep" numberOfLines={2} style={styles.metricLabel}>{label}</AppText></View>;
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#041B16', overflow: 'hidden' },
   scroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
-  content: { maxWidth: 510, gap: 18 },
+  content: { width: '100%', maxWidth: 510, gap: 18 },
   aurora: { position: 'absolute', width: 430, height: 430, borderRadius: 215, opacity: 0.15, ...(Platform.OS === 'web' ? ({ filter: 'blur(70px)' } as object) : null) },
   auroraOne: { backgroundColor: '#30C58B', top: -230, left: -100 },
   auroraTwo: { backgroundColor: '#BF843A', right: -270, top: 150, opacity: 0.09 },
@@ -177,26 +173,22 @@ const styles = StyleSheet.create({
   tagline: { color: '#E2B761', marginTop: 3 },
   subtitle: { maxWidth: 330, marginTop: 7, lineHeight: 23 },
   routeCard: { padding: 16, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(192,232,216,.16)', backgroundColor: 'rgba(7,45,35,.76)', boxShadow: '0 24px 70px rgba(0,0,0,.28)', ...(Platform.OS === 'web' ? ({ backdropFilter: 'blur(18px)' } as object) : null) },
-  routeTop: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  routeTop: { flexDirection: 'row', direction: 'ltr', alignItems: 'center', gap: 11 },
   routePin: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#73D3AD' },
-  mutedCaps: { color: '#7FAE9B', fontSize: 9, letterSpacing: 1.15, marginBottom: 2 },
-  timePill: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 99, backgroundColor: 'rgba(214,168,75,.12)', borderWidth: 1, borderColor: 'rgba(214,168,75,.22)' },
-  timeText: { color: '#E3BA68', fontSize: 9, letterSpacing: 0.5 },
   routeRail: { height: 28, justifyContent: 'center', marginVertical: 10, overflow: 'hidden' },
   routeBase: { height: 1, marginHorizontal: 7, backgroundColor: 'rgba(126,204,173,.2)' },
   routeLight: { position: 'absolute', left: 20, width: 110, height: 2, backgroundColor: '#6EE2B5', boxShadow: '0 0 10px rgba(110,226,181,.9)' },
   routeStart: { position: 'absolute', left: 5, width: 7, height: 7, borderRadius: 4, backgroundColor: '#6EE2B5' },
   routeEnd: { position: 'absolute', right: 2, transform: [{ rotate: '-32deg' }] },
-  metrics: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,.1)', paddingTop: 12 },
-  metric: { flex: 1, gap: 6 },
-  metricHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  metricNumber: { color: '#D6A84B', fontSize: 9 },
-  metricLabel: { fontSize: 11, lineHeight: 16 },
-  metricDivider: { width: StyleSheet.hairlineWidth, marginHorizontal: 11, backgroundColor: 'rgba(255,255,255,.1)' },
+  metrics: { borderTopWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,.1)', paddingTop: 5 },
+  metric: { minHeight: 38, flexDirection: 'row', direction: 'ltr', alignItems: 'center', gap: 10, paddingVertical: 7 },
+  metricNumber: { color: '#D6A84B', fontSize: 10, width: 22 },
+  metricLabel: { flex: 1, textAlign: 'right' },
+  metricDivider: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,.08)' },
   actions: { gap: 7 },
   primaryButton: { height: 58, borderRadius: 18, overflow: 'hidden', boxShadow: '0 18px 40px rgba(0,0,0,.28)' },
-  primaryFill: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18 },
-  primaryText: { color: '#07362A' },
-  arrowDisc: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0B4938' },
+  primaryFill: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 58 },
+  primaryText: { color: '#07362A', textAlign: 'center' },
+  arrowDisc: { position: 'absolute', left: 16, width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0B4938' },
 });
 
