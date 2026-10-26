@@ -1,6 +1,7 @@
 import type { StyleProp, ViewStyle } from 'react-native';
 import type {
   CheckpointStatus,
+  CheckpointDirection,
   GeoPoint,
   GeoRegion,
   ParkingZone,
@@ -20,6 +21,7 @@ export interface MapCheckpoint {
   location: GeoPoint;
   status: CheckpointStatus;
   assumed: boolean;
+  directions?: Pick<CheckpointDirection, 'id' | 'status'>[];
 }
 
 export interface MapRoute {

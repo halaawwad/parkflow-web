@@ -22,10 +22,12 @@ import type { OtpChallenge } from '@/types';
 import { errorMessage } from '@/utils/errors';
 import { haptics } from '@/utils/haptics';
 import { usePreferencesStore } from '@/store/preferencesStore';
+import { useAuthStore } from '@/store/authStore';
 
 export default function EmailScreen() {
   const router = useRouter();
   const { t } = useLocale();
+  const signIn = useAuthStore((state) => state.signIn);
   const completeOnboarding = usePreferencesStore((state) => state.completeOnboarding);
   const [email, setEmail] = useState('');
   const [touched, setTouched] = useState(false);
@@ -38,9 +40,10 @@ export default function EmailScreen() {
     mutationFn: () => devSkipEmailOtp
       ? services.auth.devLogin({ email: normalized })
       : services.auth.requestOtp({ email: normalized }),
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       haptics.success();
       if ('session' in result) {
+        await signIn(result.session, result.user);
         if (result.user.fullName) {
           completeOnboarding();
           router.replace('/(tabs)/map');

@@ -5,11 +5,12 @@ import { db, atomic, lock } from '../../database/client';
 import { env } from '../../config/env';
 import { event } from '../../realtime/outbox';
 import { assert, requireValue } from '../../utils/errors';
+import { checkpointPassages } from './passages';
 
 export interface Direction { id: string; nameAr: string; nameEn: string }
 export const freshnessMs = env.CHECKPOINT_FRESHNESS_MINUTES * 60_000;
-export function directionsOf(cp: RoadCheckpoint): Direction[] {
-  return Array.isArray(cp.directions) ? cp.directions as unknown as Direction[] : [];
+export function directionsOf(_cp: RoadCheckpoint): Direction[] {
+  return checkpointPassages;
 }
 function aggregate(rows: CheckpointReport[], now: number) {
   // A person contributes only their newest observation; no majority or latest-report winner.
@@ -30,9 +31,9 @@ function aggregate(rows: CheckpointReport[], now: number) {
 }
 export async function checkpoints() {
   const now = Date.now();
-  const rows = await db.roadCheckpoint.findMany({where:{active:true},include:{reports:{where:{hidden:false,directionId:{not:null},observedAt:{gt:new Date(now-freshnessMs)},OR:[{parentId:null},{parent:{hidden:false}}]}}}});
+  const rows = await db.roadCheckpoint.findMany({where:{active:true,enabledForLiveReporting:true},include:{reports:{where:{hidden:false,directionId:{in:checkpointPassages.map(p=>p.id)},observedAt:{gt:new Date(now-freshnessMs)},OR:[{parentId:null},{parent:{hidden:false}}]}}}});
   return rows.map(cp=>{
-    const directions = directionsOf(cp).map(d=>({...d,...aggregate(cp.enabledForLiveReporting ? cp.reports.filter(r=>r.directionId===d.id && cp.reviewedAt && r.observedAt>=cp.reviewedAt) : [],now)}));
+    const directions = directionsOf(cp).map(d=>({...d,...aggregate(cp.reports.filter(r=>r.directionId===d.id && (!cp.reviewedAt || r.observedAt>=cp.reviewedAt)),now)}));
     const states = new Set(directions.map(d=>d.status));
     const status = states.size === 1 ? directions[0].status : directions.some(d=>d.status==='conflicting') ? 'conflicting' as const : 'unknown' as const;
     const confirmed = directions.length > 0 && directions.every(d=>d.confidence==='confirmed') && states.size===1;
@@ -59,9 +60,9 @@ export async function observe(userId:string,checkpointId:string,input:Observatio
     await lock(tx,`checkpoint:${checkpointId}`);
     await lock(tx,`checkpoint-user:${userId}`);
     const cp=requireValue(await tx.roadCheckpoint.findFirst({where:{id:checkpointId,active:true}}));
-    assert(cp.enabledForLiveReporting && cp.reviewedAt && directionsOf(cp).some(d=>d.id===input.directionId),'VALIDATION','Location or direction requires administrator review');
+    assert(cp.enabledForLiveReporting && directionsOf(cp).some(d=>d.id===input.directionId),'VALIDATION','Reporting is disabled or entrance/exit was not selected');
     const now=Date.now(), observed=Date.parse(input.observedAt);
-    assert(Number.isFinite(observed) && observed>=cp.reviewedAt!.getTime() && observed<=now && observed>now-freshnessMs,'VALIDATION','Observation must be within the freshness window and not in the future');
+    assert(Number.isFinite(observed) && (!cp.reviewedAt || observed>=cp.reviewedAt.getTime()) && observed<=now && observed>now-freshnessMs,'VALIDATION','Observation must be within the freshness window and not in the future');
     assert(!await tx.checkpointReport.findFirst({where:{userId,reportedAt:{gt:new Date(now-60000)}}}),'REPORT_COOLDOWN','Wait a minute before another checkpoint observation',429);
     let status=input.status;
     if(parentId){

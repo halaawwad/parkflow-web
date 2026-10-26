@@ -461,6 +461,7 @@ export default function MapScreen() {
         location: checkpoint.location,
         status: checkpoint.status,
         assumed: checkpoint.assumed,
+        directions: checkpoint.directions?.map(({ id, status }) => ({ id, status })),
       })),
     [alerts, locale, t],
   );

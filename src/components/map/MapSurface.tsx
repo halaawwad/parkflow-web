@@ -622,20 +622,25 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
           {checkpoints?.map((checkpoint) => {
             if (!isValidGeoPoint(checkpoint.location)) return null;
             const { x, y } = project(checkpoint.location.latitude, checkpoint.location.longitude);
-            if (x < -80 || y < -40 || x > size.x + 80 || y > size.y + 40) return null;
+            const checkpointZoom = mapRef.current?.getZoom() ?? 15;
+            const compactCheckpoint = checkpointZoom < 14;
+            if (x < -100 || y < -50 || x > size.x + 100 || y > size.y + 50) return null;
 
             return (
               <Pressable
                 key={checkpoint.id}
                 onPress={() => onSelectCheckpoint?.(checkpoint.id)}
                 accessibilityRole="button"
-                accessibilityLabel={`${checkpoint.name}, ${t(`roads.status.${checkpoint.status}` as const)}`}
-                style={{ position: 'absolute', left: x - 75, top: y - 15, width: 150, alignItems: 'center' }}
+                accessibilityLabel={`${checkpoint.name}, ${checkpoint.directions?.map(p => `${t(p.id === 'entrance' ? 'roads.entrance' : 'roads.exit')}: ${t(`roads.status.${p.status}`)}`).join(', ') || t(`roads.status.${checkpoint.status}` as const)}`}
+                hitSlop={6}
+                style={{ position: 'absolute', left: x - (compactCheckpoint ? 22 : 100), top: y - (compactCheckpoint ? 12 : 40), width: compactCheckpoint ? 44 : 200, alignItems: 'center' }}
               >
                 <CheckpointMarker
                   status={checkpoint.status}
                   assumed={checkpoint.assumed}
                   label={checkpoint.name}
+                  directions={checkpoint.directions}
+                  zoom={checkpointZoom}
                 />
               </Pressable>
             );

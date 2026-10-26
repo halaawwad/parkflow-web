@@ -16,7 +16,7 @@ import { routingService } from '../../modules/routing/service';
 import { summarizeRoute } from '../../modules/routing/summary';
 route('get','/roads/checkpoints',empty,()=>roads.checkpoints());
 route('get','/roads/reports',z.object({limit}).strict(),(_r,b)=>roads.feed(b.limit));
-const observation=z.object({directionId:id,observedAt:z.iso.datetime(),note:z.string().trim().max(200).optional(),unverified:z.boolean(),location:geo.extend({accuracy:z.number().min(0).max(100000),capturedAt:z.iso.datetime()}).strict().optional()});
+const observation=z.object({directionId:z.enum(['entrance','exit']),observedAt:z.iso.datetime(),note:z.string().trim().max(200).optional(),unverified:z.boolean(),location:geo.extend({accuracy:z.number().min(0).max(100000),capturedAt:z.iso.datetime()}).strict().optional()});
 route('post','/roads/checkpoints/:id/reports',observation.extend({status:z.enum(['open','congested','severe','closed'])}).strict(),(r,b)=>roads.reportRoad(user(r),param(r),b.status,b));
 route('post','/roads/checkpoints/:id/confirmations',observation.omit({note:true}).extend({reportId:id}).strict(),(r,b)=>live.observe(user(r),param(r),b,b.reportId));
 route('post','/parking/zones/:id/reports',z.object({availability:z.enum(['available','limited','full'])}).strict(),(r,b)=>roads.reportZone(user(r),param(r),b.availability));

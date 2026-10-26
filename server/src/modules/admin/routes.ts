@@ -42,4 +42,4 @@ route('post','/admin/transactions/:id/refund',z.object({reason:z.string().min(5)
 route('get','/admin/appeals',empty,()=>admin.appeals(),admins);
 
 route('get','/admin/checkpoints',empty,()=>admin.checkpointCandidates(),admins);
-route('patch','/admin/checkpoints/:id',z.object({latitude:geo.shape.latitude,longitude:geo.shape.longitude,coordinatesReviewed:z.literal(true),enabledForLiveReporting:z.boolean(),directions:z.array(z.object({id:z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/),nameAr:text,nameEn:text}).strict()).min(1).max(12).refine(a=>new Set(a.map(d=>d.id)).size===a.length)}).strict(),(r,b)=>admin.reviewCheckpoint(actor(r),param(r),b),admins);
+route('patch','/admin/checkpoints/:id',z.object({latitude:geo.shape.latitude,longitude:geo.shape.longitude,coordinatesReviewed:z.literal(true),enabledForLiveReporting:z.boolean()}).strict(),(r,b)=>admin.reviewCheckpoint(actor(r),param(r),b),admins);

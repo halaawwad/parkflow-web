@@ -18,7 +18,7 @@ import {
   Skeleton,
   StatusBadge,
 } from '@/components/ui';
-import { CheckpointIcon, checkpointColor } from '@/components/map/CheckpointMarker';
+import { CheckpointIcon, checkpointColor, checkpointDisplayStatus } from '@/components/map/CheckpointMarker';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/spacing';
 import { radius } from '@/theme/radius';
@@ -68,7 +68,8 @@ export default function RoadAlertsScreen() {
             <Card padding="lg" style={{ paddingVertical: spacing.xs }}>
               {sorted.length === 0 ? <EmptyState compact title={t('roads.noLocations')} /> : null}
               {sorted.map((checkpoint, index) => {
-                const color = checkpointColor(checkpoint.status, checkpoint.assumed, colors);
+                const displayStatus = checkpointDisplayStatus(checkpoint.directions, checkpoint.status);
+                const color = checkpointColor(displayStatus, checkpoint.assumed, colors);
                 const open = expanded === checkpoint.id;
                 return (
                   <View key={checkpoint.id}>
@@ -95,7 +96,7 @@ export default function RoadAlertsScreen() {
                             backgroundColor: colors.surfaceAlt,
                           }}
                         >
-                          <CheckpointIcon status={checkpoint.status} color={color} size={18} />
+                          <CheckpointIcon status={displayStatus} color={color} size={18} />
                         </View>
                         <View style={{ flex: 1, gap: 2 }}>
                           <AppText variant="title" numberOfLines={1}>
@@ -103,7 +104,7 @@ export default function RoadAlertsScreen() {
                           </AppText>
                           <AppText variant="caption" color="textTertiary" numberOfLines={1}>
                             {t(checkpoint.kind==='road_gate'?'roads.roadGate':'roads.checkpointKind')}{' · '}
-                            {!checkpoint.enabledForLiveReporting
+                            {checkpoint.directions?.length ? t('roads.community') : !checkpoint.enabledForLiveReporting
                               ? t('roads.needsReview')
                               : checkpoint.assumed
                               ? t(checkpoint.status==='conflicting'?'roads.conflicting':checkpoint.status==='unknown'?'roads.unknown':'roads.unconfirmed')
@@ -112,6 +113,11 @@ export default function RoadAlertsScreen() {
                                   count: checkpoint.reportCount,
                                 })}
                           </AppText>
+                          {(checkpoint.directions ?? []).map(passage => (
+                            <AppText key={passage.id} variant="caption" style={{ color: checkpointColor(passage.status, checkpoint.assumed, colors) }}>
+                              {t(passage.id === 'entrance' ? 'roads.entrance' : 'roads.exit')}: {t(`roads.status.${passage.status}`)}
+                            </AppText>
+                          ))}
                         </View>
                         {/* Unreported checkpoints already say so in the line above. */}
                         {checkpoint.assumed ? null : (
@@ -159,6 +165,9 @@ export default function RoadAlertsScreen() {
                     />
                     <AppText variant="bodySm" numberOfLines={1} style={{ flex: 1 }}>
                       {locale === 'ar' ? item.checkpointNameAr : item.checkpointNameEn}
+                      {item.directionId === 'entrance' || item.directionId === 'exit'
+                        ? ` / ${t(item.directionId === 'entrance' ? 'roads.entrance' : 'roads.exit')}`
+                        : ''}
                     </AppText>
                     <AppText variant="caption" color="textTertiary">
                       {ago(minutesSince(item.observedAt??item.reportedAt))}

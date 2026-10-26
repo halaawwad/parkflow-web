@@ -14,5 +14,6 @@
     "src/**/*.ts",
     "prisma/**/*.ts",
     "tests/**/*.ts"
-  ]
+  ],
+  "extends": "expo/tsconfig.base"
 }

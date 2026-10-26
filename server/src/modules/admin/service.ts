@@ -6,6 +6,7 @@ import { notify } from '../notifications/service';
 import { post } from '../wallet/ledger';
 import { idempotent } from '../../utils/idempotency';
 import { event } from '../../realtime/outbox';
+import { checkpointPassages } from '../roads/passages';
 export interface Actor {userId:string;role:Role;ip?:string;userAgent?:string}
 async function audit(tx:Tx,a:Actor,action:string,resourceType:string,resourceId:string,before:unknown,after:unknown){await tx.auditLog.create({data:{actorUserId:a.userId,action,resourceType,resourceId,before:before==null?undefined:json(before),after:after==null?undefined:json(after),ip:a.ip,userAgent:a.userAgent}});}
 export async function zonePermission(tx:Tx,a:Actor,zoneId:string){const zone=requireValue(await tx.parkingZone.findUnique({where:{id:zoneId}}));if(a.role!=='ADMIN')assert(await tx.operatorUser.findUnique({where:{operatorId_userId:{operatorId:zone.operatorId,userId:a.userId}}}),'FORBIDDEN','You do not manage this zone',403);return zone;}
@@ -55,16 +56,14 @@ export async function refund(a:Actor,id:string,reason:string,key:string){return 
 export async function appeals(){return db.appeal.findMany({take:200,orderBy:{submittedAt:'desc'},include:{user:{select:{fullName:true,email:true}},violation:{select:{plateNumber:true,reason:true,reasonAr:true,amount:true,status:true}}}});}
 
 export async function checkpointCandidates(){return db.roadCheckpoint.findMany({orderBy:{nameAr:'asc'}});}
-export async function reviewCheckpoint(a:Actor,id:string,input:{latitude:number;longitude:number;directions:{id:string;nameAr:string;nameEn:string}[];coordinatesReviewed:true;enabledForLiveReporting:boolean}) {
+export async function reviewCheckpoint(a:Actor,id:string,input:{latitude:number;longitude:number;coordinatesReviewed:true;enabledForLiveReporting:boolean}) {
  assert(a.role==='ADMIN','FORBIDDEN','Administrator required',403);
  const result=await atomic(async tx=>{
   await lock(tx,`checkpoint:${id}`);
   const before=requireValue(await tx.roadCheckpoint.findUnique({where:{id}}));
-  const old=Array.isArray(before.directions)?before.directions as unknown as {id:string;nameAr:string;nameEn:string}[]:[];
-  for(const d of input.directions){const prior=old.find(p=>p.id===d.id);assert(!prior || prior.nameAr===d.nameAr && prior.nameEn===d.nameEn,'VALIDATION','Use a new direction ID when changing a travel direction');}
   const {coordinatesReviewed,...data}=input;
   // Reviewed coordinates are changed only through this explicit administrator action.
-  const after=await tx.roadCheckpoint.update({where:{id},data:{...data,directions:json(data.directions),reviewedAt:new Date(),reviewedBy:a.userId}});
+  const after=await tx.roadCheckpoint.update({where:{id},data:{...data,...(data.enabledForLiveReporting?{active:true}:{}),directions:json(checkpointPassages),reviewedAt:new Date(),reviewedBy:a.userId}});
   await audit(tx,a,'review-activate','checkpoint',id,before,after);
   await event(tx,'checkpoint.updated',{checkpointId:id});return after;
  });

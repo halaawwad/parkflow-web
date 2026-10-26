@@ -1,5 +1,5 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { Platform, StyleSheet, View, useWindowDimensions } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 import { ZoneMarker } from './ZoneMarker';
 import { CheckpointMarker } from './CheckpointMarker';
@@ -32,6 +32,10 @@ const TRAFFIC_COLORS: Record<RouteTrafficState, string> = {
   traffic_jam: '#DC2626',
 };
 const NEED_DETOUR_COLOR = '#7C3AED';
+function checkpointZoomLevel(longitudeDelta: number, width: number) {
+  const zoom = Math.log2(360 * width / (256 * Math.max(longitudeDelta, 0.000001)));
+  return zoom >= 14 ? 15 : zoom >= 11 ? 12 : 10;
+}
 
 /**
  * Google Maps on Android; Apple Maps on iOS (custom JSON styling only applies to
@@ -72,6 +76,8 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
   const { isDark, colors } = useTheme();
   const { t, row, isRTL } = useLocale();
   const mapRef = useRef<MapView>(null);
+  const { width } = useWindowDimensions();
+  const [checkpointZoom, setCheckpointZoom] = useState(() => checkpointZoomLevel(region.longitudeDelta, width));
 
   // Heading-up follow camera, tilted for a sense of the road ahead.
   const follow = Boolean(navigation?.follow);
@@ -136,6 +142,7 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
           onPressMap?.(event.nativeEvent.coordinate);
           onPressBackground?.();
         }}
+        onRegionChange={(next) => setCheckpointZoom(checkpointZoomLevel(next.longitudeDelta, width))}
         onRegionChangeComplete={(next) => onRegionChangeComplete?.(next)}
       >
         {navigation ? (
@@ -211,7 +218,7 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
 
         {checkpoints?.map((checkpoint) => (
           <Marker
-            key={`${checkpoint.id}-${checkpoint.status}-${checkpoint.assumed}-${checkpoint.name}`}
+            key={`${checkpoint.id}-${checkpoint.status}-${checkpoint.assumed}-${checkpoint.name}-${checkpoint.directions?.map(p => `${p.id}:${p.status}`).join(',')}-${checkpointZoom}`}
             coordinate={checkpoint.location}
             onPress={(event) => {
               event.stopPropagation();
@@ -220,7 +227,7 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
             anchor={{ x: 0.5, y: 0.5 }}
             accessibilityLabel={`${checkpoint.name}, ${checkpoint.status}`}
           >
-            <CheckpointMarker status={checkpoint.status} assumed={checkpoint.assumed} label={checkpoint.name} />
+            <CheckpointMarker status={checkpoint.status} assumed={checkpoint.assumed} label={checkpoint.name} directions={checkpoint.directions} zoom={checkpointZoom} />
           </Marker>
         ))}
 

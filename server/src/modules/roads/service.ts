@@ -5,14 +5,15 @@ import type { Availability, CheckpointStatus } from '@prisma/client';
 import { assert,requireValue } from '../../utils/errors';
 import { event } from '../../realtime/outbox';
 import { settlePoints } from '../trust/rewards';
+import { checkpointPassages } from './passages';
 export { checkpoints } from './live';
 /** Keep the existing service entry point; old callers must now supply reviewed observation evidence. */
 export async function reportRoad(userId:string,checkpointId:string,status:CheckpointStatus,input?:Observation){
- assert(input,'VALIDATION','A verified direction, observation time and explicit location choice are required');
+ assert(input,'VALIDATION','Select entrance or exit, observation time and an explicit location choice');
  return observe(userId,checkpointId,{...input,status});
 }
 
-export async function feed(limit=25){return (await db.checkpointReport.findMany({where:{hidden:false,directionId:{not:null},OR:[{parentId:null},{parent:{hidden:false}}]},take:limit,orderBy:{reportedAt:'desc'},include:{checkpoint:true}})).map(r=>({id:r.id,checkpointId:r.checkpointId,status:r.status,directionId:r.directionId,observedAt:r.observedAt,reportedAt:r.reportedAt,checkpointNameAr:r.checkpoint.nameAr,checkpointNameEn:r.checkpoint.nameEn}));}
+export async function feed(limit=25){return (await db.checkpointReport.findMany({where:{hidden:false,directionId:{in:checkpointPassages.map(p=>p.id)},checkpoint:{active:true,enabledForLiveReporting:true},OR:[{parentId:null},{parent:{hidden:false}}]},take:limit,orderBy:{reportedAt:'desc'},include:{checkpoint:true}})).map(r=>({id:r.id,checkpointId:r.checkpointId,status:r.status,directionId:r.directionId,observedAt:r.observedAt,reportedAt:r.reportedAt,checkpointNameAr:r.checkpoint.nameAr,checkpointNameEn:r.checkpoint.nameEn}));}
 export async function reportZone(userId:string,zoneId:string,availability:Availability){return atomic(async tx=>{await lock(tx,`report:${userId}:${zoneId}`);requireValue(await tx.parkingZone.findFirst({where:{id:zoneId,active:true}}));
  assert(!await tx.parkingReport.findFirst({where:{userId,zoneId,reportedAt:{gt:new Date(Date.now()-60000)}}}),'REPORT_COOLDOWN','Wait a minute before reporting this place again',429);
  const report=await tx.parkingReport.create({data:{userId,zoneId,availability}});const points=await reward(tx,userId,zoneId,report.id,'zone_report');await event(tx,'parking.availability.updated',{zoneId});return {report,points};});}
