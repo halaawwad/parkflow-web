@@ -39,6 +39,8 @@ export interface NavigationTarget {
 }
 
 const TICK_MS = 2_000;
+/** How long the "natural voice unavailable" notice stays up. */
+const NATURAL_VOICE_NOTICE_MS = 10_000;
 /** A route shown before starting is reused only if it begins this close to the first GPS fix. */
 const INITIAL_ROUTE_MAX_OFFSET = 60;
 
@@ -72,6 +74,8 @@ export function useTurnByTurnNavigation(locale: Locale) {
   const [overview, setOverview] = useState(false);
   const [liveMessage, setLiveMessage] = useState('');
   const [voiceStatus, setVoiceStatus] = useState<SpeechQueueStatus>({ speaking: false, blocked: false, errors: 0 });
+  /** Briefly true after natural speech is given up on, so the switch to the device voice is explained once. */
+  const [naturalVoiceNotice, setNaturalVoiceNotice] = useState(false);
   const [voice, setVoice] = useState<VoiceChoice>({ language: locale === 'ar' ? 'ar-SA' : 'en-US', available: true });
   const voiceRef = useRef(voice);
   voiceRef.current = voice;
@@ -90,10 +94,17 @@ export function useTurnByTurnNavigation(locale: Locale) {
       () => voiceRef.current,
       () => (localeRef.current === 'ar' ? 0.92 : 0.98),
       () => localeRef.current,
+      () => setNaturalVoiceNotice(true),
     );
     queueRef.current = new SpeechQueue(voiceEngineRef.current, setVoiceStatus);
   }
   const queue = queueRef.current;
+
+  useEffect(() => {
+    if (!naturalVoiceNotice) return;
+    const timer = setTimeout(() => setNaturalVoiceNotice(false), NATURAL_VOICE_NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [naturalVoiceNotice]);
 
   // Unmount (or a dev remount) silences speech; the queue itself stays usable.
   useEffect(() => () => queue.clear(), [queue]);
@@ -448,6 +459,7 @@ export function useTurnByTurnNavigation(locale: Locale) {
     liveMessage,
     voiceStatus,
     voice,
+    naturalVoiceNotice,
     /** Natural server voice in use (web, configured, reachable). */
     naturalVoice: Boolean(voiceEngineRef.current?.available),
   };

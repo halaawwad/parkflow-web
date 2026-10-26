@@ -295,13 +295,19 @@ function base64ToObjectUrl(base64: string, mimeType: string): string {
   return URL.createObjectURL(new Blob([bytes], { type: mimeType }));
 }
 
-/** No server, no key, or no access: stop asking for this session. */
+/**
+ * No server, no key, no access, or the voice quota is spent: stop asking for
+ * this session. Giving up on a spent quota (429) keeps the rest of the trip in
+ * one consistent voice instead of alternating between natural and device
+ * speech sentence by sentence.
+ */
 function isPermanentVoiceError(error: unknown): boolean {
   if (!(error instanceof AppError)) return false;
   const status = Number(error.details?.status);
   // The API client reports any 5xx as a generic network error without the server's code,
   // so a 503 (not configured, or provider down) is recognised by status.
-  return error.details?.serverCode === 'VOICE_NOT_CONFIGURED' || [401, 403, 404, 503].includes(status);
+  return ['VOICE_NOT_CONFIGURED', 'VOICE_RATE_LIMITED'].includes(String(error.details?.serverCode))
+    || [401, 403, 404, 429, 503].includes(status);
 }
 
 export type NavigationVoice = SpeechEngine & Pick<NeuralSpeechEngine, 'prefetch' | 'available'>;
@@ -316,16 +322,19 @@ export function createNavigationVoice(
   voice: () => VoiceChoice,
   rate: () => number,
   locale: () => GuidanceLocale,
+  /** Natural speech was given up on for this session; the device voice takes over. */
+  onNaturalUnavailable?: () => void,
 ): NavigationVoice {
   const device = createSpeechEngine(voice, rate);
   if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof Audio === 'undefined') {
     return Object.assign(device, { prefetch: () => undefined, available: false });
   }
   return createNeuralSpeechEngine({
-    synthesize: (text) => services.voice.speak(text, locale()).then((r) => base64ToObjectUrl(r.audio, r.mimeType)),
+    synthesize: (text, priority) => services.voice.speak(text, locale(), priority).then((r) => base64ToObjectUrl(r.audio, r.mimeType)),
     fallback: device,
     player: createWebAudioPlayer(),
     release: (source) => URL.revokeObjectURL(source),
     isPermanentError: isPermanentVoiceError,
+    onUnavailable: onNaturalUnavailable,
   });
 }

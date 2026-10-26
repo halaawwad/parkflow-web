@@ -681,47 +681,46 @@ model PermitZone {
 }
 
 model RoadCheckpoint {
-  kind String @default("checkpoint")
-  sourceReferences Json @default("[]")
-  enabledForLiveReporting Boolean @default(false)
-  directions Json @default("[]")
-  reviewedAt DateTime?
-  reviewedBy String?
-  nextExpiryAt DateTime?
-  id        String             @id @default(uuid())
-  nameAr    String
-  nameEn    String
-  latitude  Float
-  longitude Float
-  active    Boolean            @default(true)
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
-  reports   CheckpointReport[]
+  kind                    String             @default("checkpoint")
+  sourceReferences        Json               @default("[]")
+  enabledForLiveReporting Boolean            @default(false)
+  directions              Json               @default("[]")
+  reviewedAt              DateTime?
+  reviewedBy              String?
+  nextExpiryAt            DateTime?
+  id                      String             @id @default(uuid())
+  nameAr                  String
+  nameEn                  String
+  latitude                Float
+  longitude               Float
+  active                  Boolean            @default(true)
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  reports                 CheckpointReport[]
 
   @@map("road_checkpoints")
 }
 
 model CheckpointReport {
-  directionId String?
-  observedAt DateTime @default(now())
-  note String?
-  locationVerified Boolean @default(false)
-  parentId String?
-  parent CheckpointReport? @relation("CheckpointConfirmations", fields: [parentId], references: [id])
-  confirmations CheckpointReport[] @relation("CheckpointConfirmations")
+  directionId      String?
+  observedAt       DateTime           @default(now())
+  note             String?
+  locationVerified Boolean            @default(false)
+  parentId         String?
+  parent           CheckpointReport?  @relation("CheckpointConfirmations", fields: [parentId], references: [id])
+  confirmations    CheckpointReport[] @relation("CheckpointConfirmations")
+  id               String             @id @default(uuid())
+  userId           String
+  user             User               @relation(fields: [userId], references: [id])
+  checkpointId     String
+  checkpoint       RoadCheckpoint     @relation(fields: [checkpointId], references: [id])
+  status           CheckpointStatus
+  hidden           Boolean            @default(false)
+  reportedAt       DateTime           @default(now())
+  points           PointsEntry[]
 
   @@unique([parentId, userId])
   @@index([checkpointId, directionId, observedAt])
-  id           String           @id @default(uuid())
-  userId       String
-  user         User             @relation(fields: [userId], references: [id])
-  checkpointId String
-  checkpoint   RoadCheckpoint   @relation(fields: [checkpointId], references: [id])
-  status       CheckpointStatus
-  hidden       Boolean          @default(false)
-  reportedAt   DateTime         @default(now())
-  points       PointsEntry[]
-
   @@index([checkpointId, reportedAt])
   @@index([userId, reportedAt])
   @@map("road_reports")
@@ -1326,4 +1325,18 @@ model OperatorStaff {
   @@id([operatorId, userId])
   @@index([userId])
   @@map("operator_staff")
+}
+
+/// A navigation sentence already spoken by the voice model, kept so each
+/// sentence is synthesised once for every driver instead of once per trip.
+model VoiceClip {
+  /// sha256 of model, voice, locale and text.
+  key       String   @id
+  mimeType  String
+  audio     Bytes
+  createdAt DateTime @default(now())
+  usedAt    DateTime @default(now())
+
+  @@index([usedAt])
+  @@map("voice_clips")
 }

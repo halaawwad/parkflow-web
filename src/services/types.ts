@@ -261,7 +261,8 @@ export interface RoutingService {
 
 /** Natural navigation voice synthesised on the server (Gemini text-to-speech). */
 export interface VoiceService {
-  speak(text: string, locale: 'ar' | 'en'): Promise<{ mimeType: string; audio: string }>;
+  /** `now`: a driver is waiting for this sentence; `soon`: fetched ahead of time. */
+  speak(text: string, locale: 'ar' | 'en', priority?: 'now' | 'soon'): Promise<{ mimeType: string; audio: string }>;
 }
 
 export interface TrustService {

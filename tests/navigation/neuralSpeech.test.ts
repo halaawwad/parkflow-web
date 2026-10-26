@@ -4,7 +4,7 @@ import type { SpeechEngine } from '@/utils/navigation/speechQueue';
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-function setup(options: { synthesize?: (text: string) => Promise<string>; permanent?: (e: unknown) => boolean } = {}) {
+function setup(options: { synthesize?: (text: string, priority: 'now' | 'soon') => Promise<string>; permanent?: (e: unknown) => boolean; onUnavailable?: () => void } = {}) {
   const device: string[] = [];
   const played: string[] = [];
   let playing: { onEnd: () => void; onError: (e: unknown) => void } | undefined;
@@ -36,6 +36,7 @@ function setup(options: { synthesize?: (text: string) => Promise<string>; perman
     fallback,
     player,
     isPermanentError: options.permanent,
+    onUnavailable: options.onUnavailable,
     timers: {
       setTimeout: (fn) => {
         timers.set(++id, fn);
@@ -135,5 +136,33 @@ describe('natural navigation voice', () => {
     await flush();
     expect(played).toEqual([]);
     expect(device).toEqual([]);
+  });
+
+  it('asks for the sentence being spoken as urgent and for look-ahead sentences as routine', async () => {
+    const asked: [string, string][] = [];
+    const { engine } = setup({ synthesize: (text, priority) => (asked.push([text, priority]), Promise.resolve(`audio:${text}`)) });
+    engine.prefetch(['Turn left.']);
+    engine.speak('Turn right.', { onDone: () => undefined, onStopped: () => undefined, onError: () => undefined });
+    await flush();
+    expect(asked).toEqual([['Turn left.', 'soon'], ['Turn right.', 'now']]);
+  });
+
+  it('gives up once on a spent quota and keeps the rest of the trip in the device voice', async () => {
+    let unavailable = 0;
+    const quota = new Error('VOICE_RATE_LIMITED');
+    const { engine, device } = setup({
+      synthesize: () => Promise.reject(quota),
+      permanent: (error) => error === quota,
+      onUnavailable: () => unavailable++,
+    });
+    const callbacks = { onDone: () => undefined, onStopped: () => undefined, onError: () => undefined };
+    engine.speak('Turn right.', callbacks);
+    await flush();
+    engine.speak('Turn left.', callbacks);
+    engine.speak('Arrived.', callbacks);
+    await flush();
+    expect(engine.available).toBe(false);
+    expect(unavailable).toBe(1);
+    expect(device).toEqual(['Turn right.', 'Turn left.', 'Arrived.']);
   });
 });
