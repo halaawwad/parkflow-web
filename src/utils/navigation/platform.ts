@@ -20,7 +20,15 @@ export interface VoiceChoice {
   voice?: string;
   /** False when the device has no voice for this language (the system default will be tried). */
   available: boolean;
+  /**
+   * A natural-sounding voice (neural / online / Google / premium). Legacy
+   * desktop voices — e.g. Windows' Arabic "Naayf" — are robotic, and the web
+   * app would rather stay quiet than speak with one.
+   */
+  natural?: boolean;
 }
+
+const NATURAL_VOICE = /natural|neural|online|google|premium|enhanced|siri/i;
 
 const LANGUAGE: Record<GuidanceLocale, string> = { ar: 'ar-SA', en: 'en-US' };
 
@@ -34,7 +42,7 @@ export async function chooseVoice(locale: GuidanceLocale): Promise<VoiceChoice> 
     const preferred = locale === 'ar' ? ['ar-sa', 'ar-jo', 'ar-ps', 'ar-ae', 'ar-eg'] : ['en-us', 'en-gb'];
     // Natural/neural voices (Edge "Online (Natural)", Google, Apple premium) sound far
     // less robotic than legacy desktop voices, so they win regardless of dialect.
-    const natural = /natural|neural|online|google|premium|enhanced|siri/i;
+    const natural = NATURAL_VOICE;
     const score = (voice: Speech.Voice) => {
       const lang = voice.language.toLowerCase().replace('_', '-');
       const rank = preferred.indexOf(lang);
@@ -42,7 +50,9 @@ export async function chooseVoice(locale: GuidanceLocale): Promise<VoiceChoice> 
       return quality + (rank === -1 ? 5 : rank);
     };
     const best = [...candidates].sort((a, b) => score(a) - score(b))[0]!;
-    return { language: best.language, voice: best.identifier, available: true };
+    // Phone voices (Android, iOS) are neural already; only desktop browsers ship robotic ones.
+    const isNatural = Platform.OS !== 'web' || best.quality === Speech.VoiceQuality.Enhanced || natural.test(best.name ?? '');
+    return { language: best.language, voice: best.identifier, available: true, natural: isNatural };
   } catch {
     return { language: LANGUAGE[locale], available: false };
   }
@@ -310,7 +320,7 @@ function isPermanentVoiceError(error: unknown): boolean {
     || [401, 403, 404, 429, 503].includes(status);
 }
 
-export type NavigationVoice = SpeechEngine & Pick<NeuralSpeechEngine, 'prefetch' | 'available'>;
+export type NavigationVoice = SpeechEngine & Pick<NeuralSpeechEngine, 'prefetch' | 'available' | 'retry'>;
 
 /**
  * The voice navigation speaks with. On web: natural server-synthesised speech
@@ -327,11 +337,25 @@ export function createNavigationVoice(
 ): NavigationVoice {
   const device = createSpeechEngine(voice, rate);
   if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof Audio === 'undefined') {
-    return Object.assign(device, { prefetch: () => undefined, available: false });
+    return Object.assign(device, { prefetch: () => undefined, available: false, retry: () => undefined });
   }
+  // On web the device voice stands in only when it sounds natural. A robotic
+  // one is never used: the sentence stays on screen and in the live region.
+  const naturalDevice = () => voice().natural === true;
+  const fallback: SpeechEngine = {
+    speak(text, callbacks) {
+      if (naturalDevice()) device.speak(text, callbacks);
+      else callbacks.onDone();
+    },
+    stop: () => device.stop(),
+    isSpeaking: () => Boolean(device.isSpeaking?.()),
+  };
   return createNeuralSpeechEngine({
     synthesize: (text, priority) => services.voice.speak(text, locale(), priority).then((r) => base64ToObjectUrl(r.audio, r.mimeType)),
-    fallback: device,
+    fallback,
+    // With no natural device voice to step in, wait longer for the natural audio.
+    waitMs: () => (naturalDevice() ? 1200 : 4000),
+    routineWaitMs: () => (naturalDevice() ? 3500 : 9000),
     player: createWebAudioPlayer(),
     release: (source) => URL.revokeObjectURL(source),
     isPermanentError: isPermanentVoiceError,

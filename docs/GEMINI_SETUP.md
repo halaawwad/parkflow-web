@@ -5,7 +5,7 @@ ParkFlow uses Google Gemini **only on the server**, for three optional features:
 | Feature | Model variable | Without a key |
 | --- | --- | --- |
 | Dashboard warning-light check (`/vehicle-warnings/check`) | `GEMINI_MODEL` | Returns 503 and the screen says the check is unavailable |
-| Natural navigation voice (`/voice/speak`) | `GEMINI_TTS_MODEL`, `GEMINI_TTS_VOICE` | The device's own speech engine is used |
+| Natural navigation voice (`/voice/speak`) | `GEMINI_TTS_MODEL`, `GEMINI_TTS_FALLBACK_MODELS`, `GEMINI_TTS_VOICE` | The device's own speech engine is used |
 | Route overview in route details (`/routes/summary`) | `GEMINI_MODEL` | No overview is shown |
 
 Navigation itself (routes, turns, rerouting, arrival) never depends on Gemini.
@@ -76,3 +76,11 @@ curl -s -X POST http://localhost:4000/api/v1/routes/summary \
 - `AI_NOT_CONFIGURED`: `GEMINI_API_KEY` is not set on that server.
 
 In the app, open a route and tap **Route details**. The overview appears with a ✨ icon.
+
+## Keeping the navigation voice available
+
+Each voice model has its own quota. When `GEMINI_TTS_MODEL` runs out, the server moves to the next
+model in `GEMINI_TTS_FALLBACK_MODELS` with the same voice, and every sentence it has spoken is kept
+in the `voice_clips` table and reused for all drivers. On the free tier the daily quota of a voice
+model is still small: for a voice that never drops out, enable billing on the Google Cloud project of
+the voice key (Google AI Studio → API keys → the key's project → Set up billing).

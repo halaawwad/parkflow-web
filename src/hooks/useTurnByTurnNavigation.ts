@@ -76,6 +76,8 @@ export function useTurnByTurnNavigation(locale: Locale) {
   const [voiceStatus, setVoiceStatus] = useState<SpeechQueueStatus>({ speaking: false, blocked: false, errors: 0 });
   /** Briefly true after natural speech is given up on, so the switch to the device voice is explained once. */
   const [naturalVoiceNotice, setNaturalVoiceNotice] = useState(false);
+  /** Natural speech was given up on for this session (sticky, unlike the notice). */
+  const [naturalVoiceLost, setNaturalVoiceLost] = useState(false);
   const [voice, setVoice] = useState<VoiceChoice>({ language: locale === 'ar' ? 'ar-SA' : 'en-US', available: true });
   const voiceRef = useRef(voice);
   voiceRef.current = voice;
@@ -94,7 +96,10 @@ export function useTurnByTurnNavigation(locale: Locale) {
       () => voiceRef.current,
       () => (localeRef.current === 'ar' ? 0.92 : 0.98),
       () => localeRef.current,
-      () => setNaturalVoiceNotice(true),
+      () => {
+        setNaturalVoiceLost(true);
+        setNaturalVoiceNotice(true);
+      },
     );
     queueRef.current = new SpeechQueue(voiceEngineRef.current, setVoiceStatus);
   }
@@ -111,11 +116,19 @@ export function useTurnByTurnNavigation(locale: Locale) {
 
   useEffect(() => {
     let cancelled = false;
-    void chooseVoice(locale).then((choice) => {
-      if (!cancelled) setVoice(choice);
-    });
+    const pick = () => {
+      void chooseVoice(locale).then((choice) => {
+        if (!cancelled) setVoice(choice);
+      });
+    };
+    pick();
+    // Browsers fill their voice list after load; pick again once it arrives so a
+    // natural voice (e.g. Edge's "Online (Natural)") is not missed.
+    const synth = Platform.OS === 'web' && typeof window !== 'undefined' ? window.speechSynthesis : undefined;
+    synth?.addEventListener?.('voiceschanged', pick);
     return () => {
       cancelled = true;
+      synth?.removeEventListener?.('voiceschanged', pick);
     };
   }, [locale]);
 
@@ -342,6 +355,10 @@ export function useTurnByTurnNavigation(locale: Locale) {
       // Must run inside the Start tap: mobile browsers only allow sound a tap started.
       unlockWebAudio();
       queue.reset();
+      // Each trip gives the natural voice a fresh chance; a spent quota may be back.
+      voiceEngineRef.current?.retry();
+      setNaturalVoiceLost(false);
+      setNaturalVoiceNotice(false);
       targetRef.current = { ...target };
       const profile = target.routeOptions?.profile ?? 'driving';
       voiceEngineRef.current?.prefetch([systemPhrases.start(localeRef.current, profile), systemPhrases.rerouting(localeRef.current, profile)]);
@@ -467,6 +484,7 @@ export function useTurnByTurnNavigation(locale: Locale) {
     voiceStatus,
     voice,
     naturalVoiceNotice,
+    naturalVoiceLost,
     /** Natural server voice in use (web, configured, reachable). */
     naturalVoice: Boolean(voiceEngineRef.current?.available),
   };

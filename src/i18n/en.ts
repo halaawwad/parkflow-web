@@ -699,6 +699,7 @@ export const en = {
   'nav.paused': "Guidance is paused. Location tracking is off.",
   'nav.voiceBlocked': "Voice is blocked by the browser. Tap to enable it.",
   'nav.naturalVoiceUnavailable': "The natural voice is unavailable right now. Continuing with your device's voice for this trip.",
+  'nav.naturalVoiceSilent': "The natural voice is unavailable right now. Guidance continues on screen, and the voice comes back on your next trip.",
   'nav.voiceMissing': "No voice for this language is installed on this device. Guidance is shown on screen.",
   'nav.arrived': "You have arrived",
   'nav.arrivedAt': "You have arrived at {name}",
