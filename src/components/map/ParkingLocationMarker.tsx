@@ -50,8 +50,8 @@ export function ParkingLocationMarker({ location, selected }: ParkingLocationMar
       <View
         style={[
           {
-            minWidth: selected ? 48 : 40,
-            height: selected ? 36 : 32,
+            minWidth: selected ? 46 : 38,
+            height: selected ? 34 : 28,
             paddingHorizontal: spacing.sm,
             flexDirection: row,
             alignItems: 'center',
@@ -59,10 +59,10 @@ export function ParkingLocationMarker({ location, selected }: ParkingLocationMar
             gap: spacing.xs,
             borderRadius: radius.pill,
             backgroundColor: color,
-            borderWidth: selected ? 3 : 2,
+            borderWidth: selected ? 2.5 : 1.5,
             borderColor: colors.surface,
           },
-          shadow.md,
+          selected ? shadow.md : shadow.sm,
         ]}
       >
         <CarFront size={selected ? 15 : 13} color={colors.textOnColor} strokeWidth={2.5} />

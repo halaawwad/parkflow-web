@@ -1,5 +1,5 @@
 import { forwardRef, type ReactNode } from 'react';
-import { Platform, Pressable, type PressableProps, type ViewStyle, type StyleProp } from 'react-native';
+import { Platform, Pressable, StyleSheet, type PressableProps, type ViewStyle, type StyleProp } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -34,10 +34,13 @@ export const PressableScale = forwardRef<React.ComponentRef<typeof Pressable>, P
     // Desktop web only: a faint lift on hover so pointer users get feedback
     // before they click. Touch devices never fire hover, so they are unaffected.
     const hovered = useSharedValue(0);
+    // The animated opacity below replaces any opacity in `style`, so callers'
+    // own value (e.g. a disabled button's 0.45) is folded in rather than lost.
+    const baseOpacity = (StyleSheet.flatten(style)?.opacity as number | undefined) ?? 1;
 
     const animatedStyle = useAnimatedStyle(() => ({
       transform: [{ scale: 1 - pressed.value * (1 - scaleTo) }],
-      opacity: (1 - pressed.value * (1 - dimTo)) * (1 - hovered.value * 0.06),
+      opacity: baseOpacity * (1 - pressed.value * (1 - dimTo)) * (1 - hovered.value * 0.06),
     }));
 
     return (
