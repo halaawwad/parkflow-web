@@ -20,14 +20,16 @@ export interface AudioPlayer {
 }
 
 export interface NeuralSpeechOptions {
-  /** Returns a playable source (object URL / data URI) for the sentence. */
-  synthesize: (text: string) => Promise<string>;
+  /** Returns a playable source (object URL / data URI) for the sentence. `now` when it is about to be spoken. */
+  synthesize: (text: string, priority: 'now' | 'soon') => Promise<string>;
   fallback: SpeechEngine;
   player: AudioPlayer;
   /** Releases a source evicted from the cache (e.g. URL.revokeObjectURL). */
   release?: (source: string) => void;
-  /** An error after which asking again is pointless (not configured, no access). */
+  /** An error after which asking again is pointless (not configured, no access, quota spent). */
   isPermanentError?: (error: unknown) => boolean;
+  /** Called once when the engine gives up on natural audio for the session. */
+  onUnavailable?: () => void;
   /** Longest wait for natural audio before an urgent prompt uses the device voice. */
   waitMs?: number;
   /** Same for routine prompts, which are spoken well ahead of the maneuver. */
@@ -63,6 +65,7 @@ export function createNeuralSpeechEngine(options: NeuralSpeechOptions): NeuralSp
     player,
     release,
     isPermanentError = () => false,
+    onUnavailable,
     waitMs = 1200,
     routineWaitMs = 3500,
     cacheLimit = 160,
@@ -91,7 +94,13 @@ export function createNeuralSpeechEngine(options: NeuralSpeechOptions): NeuralSp
     }
   };
 
-  const load = (text: string): Promise<string | undefined> => {
+  const giveUp = () => {
+    if (disabled) return;
+    disabled = true;
+    onUnavailable?.();
+  };
+
+  const load = (text: string, priority: 'now' | 'soon'): Promise<string | undefined> => {
     const hit = cache.get(text);
     if (hit) {
       // Recently used sentences stay cached.
@@ -102,7 +111,7 @@ export function createNeuralSpeechEngine(options: NeuralSpeechOptions): NeuralSp
     if (disabled) return Promise.resolve(undefined);
     const inFlight = pending.get(text);
     if (inFlight) return inFlight;
-    const request = synthesize(text)
+    const request = synthesize(text, priority)
       .then((source) => {
         failures = 0;
         remember(text, source);
@@ -110,7 +119,7 @@ export function createNeuralSpeechEngine(options: NeuralSpeechOptions): NeuralSp
       })
       .catch((error: unknown) => {
         failures += 1;
-        if (isPermanentError(error) || failures >= MAX_CONSECUTIVE_FAILURES) disabled = true;
+        if (isPermanentError(error) || failures >= MAX_CONSECUTIVE_FAILURES) giveUp();
         return undefined;
       })
       .finally(() => pending.delete(text));
@@ -135,7 +144,7 @@ export function createNeuralSpeechEngine(options: NeuralSpeechOptions): NeuralSp
       const next = (): Promise<void> => {
         const text = queue.shift();
         if (!text || disabled) return Promise.resolve();
-        return load(text).then(next);
+        return load(text, 'soon').then(next);
       };
       for (let i = 0; i < PREFETCH_CONCURRENCY; i++) void next();
     },
@@ -159,7 +168,7 @@ export function createNeuralSpeechEngine(options: NeuralSpeechOptions): NeuralSp
         settled = true;
         useFallback();
       }, speakOptions?.urgent === false ? routineWaitMs : waitMs);
-      void load(text).then((source) => {
+      void load(text, 'now').then((source) => {
         if (settled || mine !== token) return;
         settled = true;
         clearWait();

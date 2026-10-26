@@ -5,6 +5,7 @@ import { speak } from './service';
 route(
   'post',
   '/voice/speak',
-  z.object({ text: z.string().trim().min(1).max(300), locale: z.enum(['ar', 'en']) }).strict(),
-  (_r, b) => speak(b.text, b.locale),
+  // `priority` is optional so older app builds keep working.
+  z.object({ text: z.string().trim().min(1).max(300), locale: z.enum(['ar', 'en']), priority: z.enum(['now', 'soon']).optional() }).strict(),
+  (_r, b) => speak(b.text, b.locale, b.priority),
 );
