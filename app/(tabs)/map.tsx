@@ -74,7 +74,7 @@ const TAB_BAR_CLEARANCE = 72;
 /** The control rail starts just below the compact vehicle row… */
 const CONTROL_RAIL_TOP = 64;
 /** …or below the destination search field when it is showing, so it never covers the field's mic button. */
-const CONTROL_RAIL_TOP_WITH_SEARCH = 124;
+const CONTROL_RAIL_TOP_WITH_SEARCH = 120;
 
 const FASTEST_PARKING_ROUTE = {
   mode: 'fastest',

@@ -55,14 +55,12 @@ function MenuIcon({ children }: { children: React.ReactNode }) {
   return (
     <View
       style={{
-        width: 40,
-        height: 40,
-        borderRadius: radius.md,
+        width: 34,
+        height: 34,
+        borderRadius: radius.sm,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: colors.brandSofter,
-        borderWidth: 1,
-        borderColor: colors.brandSoft,
       }}
     >
       {children}
@@ -96,14 +94,14 @@ export default function ProfileScreen() {
     router.replace('/(onboarding)/welcome');
   };
 
-  const iconProps = { size: 19, color: colors.brand, strokeWidth: 2.1 } as const;
+  const iconProps = { size: 17, color: colors.brand, strokeWidth: 2 } as const;
 
   return (
     <Screen layout="fixed" safeBottom={false}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
-          gap: spacing.xl,
+          gap: spacing.lg,
           paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
         }}
       >
@@ -112,13 +110,13 @@ export default function ProfileScreen() {
         <HeroSurface padding="xl" contentStyle={{ alignItems: 'center', gap: spacing.md }}>
           {/* A brass ring sets the initials apart from the deep surface. */}
           <View style={{ padding: 3, borderRadius: 999, borderWidth: 1.5, borderColor: colors.accent }}>
-            <Avatar name={user?.fullName} size={76} tone="surface" />
+            <Avatar name={user?.fullName} size={68} tone="surface" />
           </View>
           <View style={{ gap: 4, alignItems: 'center' }}>
             <AppText variant="h2" align="center" color="onDeep">
               {user?.fullName}
             </AppText>
-            <AppText variant="body" color="onDeepMuted" numeric align="center">
+            <AppText variant="bodySm" color="onDeepMuted" numeric align="center">
               {user?.email}
             </AppText>
           </View>
@@ -162,21 +160,21 @@ export default function ProfileScreen() {
             showChevron
             onPress={() => router.push('/profile/points')}
           />
-          <Divider inset={52} />
+          <Divider inset={46} />
           <ListItem
             title={t('profile.roadAlerts')}
             leading={<MenuIcon><TriangleAlert {...iconProps} /></MenuIcon>}
             showChevron
             onPress={() => router.push('/roads')}
           />
-          <Divider inset={52} />
+          <Divider inset={46} />
           <ListItem
             title={t('reservation.myReservations')}
             leading={<MenuIcon><CalendarCheck {...iconProps} /></MenuIcon>}
             showChevron
             onPress={() => router.push('/parking/reservations')}
           />
-          <Divider inset={52} />
+          <Divider inset={46} />
           <ListItem
             title={t('gate.passTitle')}
             leading={<MenuIcon><QrCode {...iconProps} /></MenuIcon>}
@@ -195,7 +193,7 @@ export default function ProfileScreen() {
                   showChevron
                   onPress={() => router.push('/gate')}
                 />
-                <Divider inset={52} />
+                <Divider inset={46} />
               </>
             ) : null}
             <ListItem
@@ -214,21 +212,21 @@ export default function ProfileScreen() {
             showChevron
             onPress={() => router.push('/profile/personal')}
           />
-          <Divider inset={52} />
+          <Divider inset={46} />
           <ListItem
             title={t('profile.paymentMethods')}
             leading={<MenuIcon><CreditCard {...iconProps} /></MenuIcon>}
             showChevron
             onPress={() => router.push('/wallet/methods')}
           />
-          <Divider inset={52} />
+          <Divider inset={46} />
           <ListItem
             title={t('violation.title')}
             leading={<MenuIcon><ScrollText {...iconProps} /></MenuIcon>}
             showChevron
             onPress={() => router.push('/violations')}
           />
-          <Divider inset={52} />
+          <Divider inset={46} />
           <ListItem
             title={t('notifications.title')}
             leading={<MenuIcon><Bell {...iconProps} /></MenuIcon>}
@@ -244,14 +242,14 @@ export default function ProfileScreen() {
             showChevron
             onPress={() => router.push('/profile/settings')}
           />
-          <Divider inset={52} />
+          <Divider inset={46} />
           <ListItem
             title={t('profile.help')}
             leading={<MenuIcon><CircleHelp {...iconProps} /></MenuIcon>}
             showChevron
             onPress={() => router.push('/profile/help')}
           />
-          <Divider inset={52} />
+          <Divider inset={46} />
           <ListItem
             title={t('profile.about')}
             leading={<MenuIcon><Info {...iconProps} /></MenuIcon>}

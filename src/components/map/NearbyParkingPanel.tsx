@@ -73,8 +73,9 @@ export function NearbyParkingPanel({
       testID="nearby-parking-panel"
       style={[
         {
-          marginHorizontal: spacing.md,
-          marginBottom: spacing.lg,
+          // The parent already insets by spacing.md; this lands the edges on the screen gutter.
+          marginHorizontal: spacing.sm,
+          marginBottom: spacing.md,
           paddingBottom: spacing.md,
           borderRadius: radius.xl,
           overflow: 'hidden',
@@ -101,13 +102,13 @@ export function NearbyParkingPanel({
               flexDirection: row,
               alignItems: 'center',
               gap: spacing.md,
-              paddingTop: spacing.md,
+              paddingTop: spacing.sm,
               paddingBottom: spacing.md,
               paddingHorizontal: spacing.lg,
             }}
           >
             <View style={{ flex: 1, gap: 2 }}>
-              <AppText variant="titleLg">{t('map.nearby')}</AppText>
+              <AppText variant="title">{t('map.nearby')}</AppText>
               <AppText variant="caption" color="textTertiary" numeric>
                 {loading ? t('common.loading') : zonesFoundLabel(zones.length, locale, t)}
               </AppText>

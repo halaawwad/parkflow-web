@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { ChevronDown, ChevronUp, Footprints, Navigation, Navigation2, ShieldCheck, Sparkles, TriangleAlert, X } from 'lucide-react-native';
-import { ScrollView, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppButton, AppText, IconButton, PressableScale } from '@/components/ui';
 import { useLocale } from '@/hooks/useLocale';
@@ -234,7 +234,17 @@ export function CompactRoutePanel({
     <View
       testID="compact-route-panel"
       style={[
-        { gap: spacing.sm, padding: spacing.md, borderRadius: radius.xxl, backgroundColor: colors.surface },
+        {
+          gap: spacing.sm,
+          padding: spacing.md,
+          // Same gutter and lift as the nearby-parking panel, so the panel never touches the tab bar.
+          marginHorizontal: spacing.sm,
+          marginBottom: spacing.md,
+          borderRadius: radius.xxl,
+          backgroundColor: colors.surface,
+          borderWidth: StyleSheet.hairlineWidth * 2,
+          borderColor: colors.glassBorder,
+        },
         shadow.md,
       ]}
     >
@@ -421,6 +431,8 @@ export function CompactRoutePanel({
         {destination.type === 'place' ? null : (
           <AppButton
             label={destinationActionLabel}
+            // Tonal: "Start trip" above is this panel's one solid primary.
+            variant={onStartNavigation && !noWalkingRoute ? 'tonal' : 'primary'}
             size="sm"
             style={{ flex: 1 }}
             onPress={destination.type === 'parking' ? onStartParking : onOpenDestination}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import {
   Accessibility,
   Navigation,
@@ -10,7 +10,6 @@ import {
   Users,
   TriangleAlert,
   Info,
-  Map,
 } from 'lucide-react-native';
 
 import { AppButton, AppText, BottomSheet, Divider, StatusBadge } from '@/components/ui';
@@ -39,33 +38,43 @@ export interface ZoneSheetProps {
   startDisabled?: boolean;
 }
 
-/** Compact fact tile used inside the sheet — three across, no wall of text. */
-function Fact({
+/**
+ * One line of the zone's spec list: icon and label at the start, value at the
+ * end — read like a ticket, so the eye scans one column of numbers.
+ */
+function SpecRow({
   icon,
   label,
   value,
+  tone = 'default',
+  first = false,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
+  tone?: 'default' | 'info';
+  first?: boolean;
 }) {
   const { colors } = useTheme();
+  const { row } = useLocale();
 
   return (
     <View
       style={{
-        flex: 1,
-        gap: 6,
-        padding: spacing.md,
-        borderRadius: radius.md,
-        backgroundColor: colors.surfaceAlt,
+        flexDirection: row,
+        alignItems: 'center',
+        gap: spacing.sm + 2,
+        minHeight: 44,
+        paddingHorizontal: spacing.md + 2,
+        borderTopWidth: first ? 0 : StyleSheet.hairlineWidth * 2,
+        borderTopColor: colors.divider,
       }}
     >
       {icon}
-      <AppText variant="caption" color="textTertiary" numberOfLines={1}>
+      <AppText variant="bodySm" color={tone === 'info' ? 'infoText' : 'textSecondary'} numberOfLines={1} style={{ flex: 1 }}>
         {label}
       </AppText>
-      <AppText variant="title" numberOfLines={1} numeric>
+      <AppText variant="title" numberOfLines={1} numeric color={tone === 'info' ? 'infoText' : 'text'}>
         {value}
       </AppText>
     </View>
@@ -124,8 +133,8 @@ export function ZoneSheet({
         <View style={{ flexDirection: row, alignItems: 'flex-start', gap: spacing.md }}>
           <View
             style={{
-              width: 46,
-              height: 46,
+              width: 42,
+              height: 42,
               borderRadius: radius.md,
               alignItems: 'center',
               justifyContent: 'center',
@@ -133,9 +142,9 @@ export function ZoneSheet({
             }}
           >
             {isGarage ? (
-              <Building2 size={22} color={colors.info} strokeWidth={2.2} />
+              <Building2 size={20} color={colors.info} strokeWidth={2.1} />
             ) : (
-              <CircleParking size={22} color={colors.brand} strokeWidth={2.2} />
+              <CircleParking size={20} color={colors.brand} strokeWidth={2.1} />
             )}
           </View>
 
@@ -205,84 +214,71 @@ export function ZoneSheet({
           </View>
         ) : null}
 
-        {/* Two tiles, not three: an hours range never fits a third of the width
-            and was being truncated, so it gets its own full-width row below. */}
-        <View style={{ gap: spacing.sm }}>
-          <View style={{ flexDirection: row, gap: spacing.sm }}>
-            <Fact
-              icon={<CircleParking size={16} color={colors.textTertiary} strokeWidth={2.2} />}
-              label={t('zone.rate')}
-              value={`${formatRate(zone.tariff.hourlyRate)}${t('common.perHour')}`}
-            />
-            <Fact
-              icon={<Timer size={16} color={colors.textTertiary} strokeWidth={2.2} />}
-              label={t('zone.maxStay')}
-              value={
-                zone.tariff.maxStayMinutes
-                  ? formatDurationShort(zone.tariff.maxStayMinutes * 60, locale)
-                  : '—'
-              }
-            />
-          </View>
-
-          <View
-            style={{
-              flexDirection: row,
-              alignItems: 'center',
-              gap: spacing.md,
-              paddingVertical: spacing.md,
-              paddingHorizontal: spacing.lg,
-              borderRadius: radius.md,
-              backgroundColor: colors.surfaceAlt,
-            }}
-          >
-            <Clock size={16} color={colors.textTertiary} strokeWidth={2.2} />
-            <AppText variant="caption" color="textTertiary" style={{ flex: 1 }}>
-              {t('zone.operatingHours')}
-            </AppText>
-            <AppText variant="title" numeric>
-              {today && !today.closed
+        <View
+          style={{
+            borderRadius: radius.lg,
+            backgroundColor: colors.background,
+            borderWidth: StyleSheet.hairlineWidth * 2,
+            borderColor: colors.divider,
+            overflow: 'hidden',
+          }}
+        >
+          <SpecRow
+            first
+            icon={<CircleParking size={16} color={colors.textTertiary} strokeWidth={2} />}
+            label={t('zone.rate')}
+            value={`${formatRate(zone.tariff.hourlyRate)}${t('common.perHour')}`}
+          />
+          <SpecRow
+            icon={<Timer size={16} color={colors.textTertiary} strokeWidth={2} />}
+            label={t('zone.maxStay')}
+            value={
+              zone.tariff.maxStayMinutes
+                ? formatDurationShort(zone.tariff.maxStayMinutes * 60, locale)
+                : '—'
+            }
+          />
+          <SpecRow
+            icon={<Clock size={16} color={colors.textTertiary} strokeWidth={2} />}
+            label={t('zone.operatingHours')}
+            value={
+              today && !today.closed
                 ? formatClockRange(today.opensAt, today.closesAt, dateLocale)
-                : t('zone.closedNow')}
-            </AppText>
-          </View>
-
+                : t('zone.closedNow')
+            }
+          />
           {zone.accessibleSpots ? (
-            <View
-              style={{
-                flexDirection: row,
-                alignItems: 'center',
-                gap: spacing.md,
-                paddingVertical: spacing.md,
-                paddingHorizontal: spacing.lg,
-                borderRadius: radius.md,
-                backgroundColor: colors.infoSoft,
-              }}
-            >
-              <Accessibility size={16} color={colors.info} strokeWidth={2.2} />
-              <AppText variant="caption" color="infoText" style={{ flex: 1 }}>
-                {t('zone.accessibleShort')}
-              </AppText>
-              <AppText variant="title" numeric color="infoText">
-                {zone.accessibleSpots}
-              </AppText>
-            </View>
+            <SpecRow
+              tone="info"
+              icon={<Accessibility size={16} color={colors.info} strokeWidth={2} />}
+              label={t('zone.accessibleShort')}
+              value={String(zone.accessibleSpots)}
+            />
           ) : null}
         </View>
 
         {/* One-tap driver report — feeds the crowd availability everyone sees. */}
         <View style={{ gap: spacing.sm }}>
-          <AppText variant="label" color="textSecondary">
+          <AppText variant="caption" color="textTertiary">
             {t('zone.reportPrompt')}
           </AppText>
-          <View style={{ flexDirection: row, gap: spacing.sm }}>
+          {/* A quiet track: reporting is a contribution, not one of the sheet's actions. */}
+          <View
+            style={{
+              flexDirection: row,
+              gap: 4,
+              padding: 4,
+              borderRadius: radius.md,
+              backgroundColor: colors.track,
+            }}
+          >
             {(['available', 'limited', 'full'] as const).map((level) => (
               <AppButton
                 key={level}
                 label={t(`zone.report.${level}` as const)}
-                variant="secondary"
+                variant="ghost"
                 size="sm"
-                style={{ flex: 1 }}
+                style={{ flex: 1, minHeight: 40, paddingHorizontal: spacing.sm, borderRadius: radius.sm }}
                 loading={reportZone.isPending && reportZone.variables?.availability === level}
                 disabled={reportZone.isPending}
                 onPress={() => sendReport(level)}
@@ -305,37 +301,44 @@ export function ZoneSheet({
 
         <Divider />
 
-        <AppButton
-          label={t('parkingLayout.viewMap')}
-          variant="secondary"
-          icon={<Map size={18} color={colors.text} strokeWidth={2.2} />}
-          onPress={() => onViewParkingMap(zone)}
-          testID="zone-view-parking-map"
-        />
+        {/* Secondary actions pair up; the primary CTA alone carries colour. */}
+        <View style={{ gap: spacing.sm }}>
+          <View style={{ flexDirection: row, gap: spacing.sm }}>
+            <AppButton
+              label={t('reservation.reserveSpot')}
+              variant="secondary"
+              size="md"
+              onPress={() => onReserve(zone)}
+              disabled={startDisabled}
+              style={{ flex: 1, paddingHorizontal: spacing.md }}
+              testID="zone-reserve-spot"
+            />
+            <AppButton
+              label={t('parkingLayout.viewMap')}
+              variant="secondary"
+              size="md"
+              onPress={() => onViewParkingMap(zone)}
+              style={{ flex: 1, paddingHorizontal: spacing.md }}
+              testID="zone-view-parking-map"
+            />
+          </View>
 
-        <AppButton
-          label={t('reservation.reserveSpot')}
-          variant="tonal"
-          onPress={() => onReserve(zone)}
-          disabled={startDisabled}
-          testID="zone-reserve-spot"
-        />
-
-        <View style={{ flexDirection: row, gap: spacing.md }}>
-          <AppButton
-            label={t('zone.route')}
-            variant="secondary"
-            onPress={() => onNavigate(zone)}
-            icon={<Navigation size={18} color={colors.text} strokeWidth={2.2} />}
-            style={{ flex: 1 }}
-          />
-          <AppButton
-            label={t('zone.startParking')}
-            onPress={() => onStartParking(zone)}
-            disabled={startDisabled || zone.availability === 'full'}
-            style={{ flex: 1.35 }}
-            testID="zone-start-parking"
-          />
+          <View style={{ flexDirection: row, gap: spacing.sm }}>
+            <AppButton
+              label={t('zone.route')}
+              variant="secondary"
+              onPress={() => onNavigate(zone)}
+              icon={<Navigation size={17} color={colors.text} strokeWidth={2.2} />}
+              style={{ flex: 1, paddingHorizontal: spacing.md }}
+            />
+            <AppButton
+              label={t('zone.startParking')}
+              onPress={() => onStartParking(zone)}
+              disabled={startDisabled || zone.availability === 'full'}
+              style={{ flex: 1.2, paddingHorizontal: spacing.md }}
+              testID="zone-start-parking"
+            />
+          </View>
         </View>
       </View>
     </BottomSheet>

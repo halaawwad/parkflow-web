@@ -196,7 +196,7 @@ export function BottomSheet({
         >
           <AppText variant="h2">{title}</AppText>
           {subtitle ? (
-            <AppText variant="body" color="textSecondary">
+            <AppText variant="bodySm" color="textSecondary">
               {subtitle}
             </AppText>
           ) : null}
@@ -282,11 +282,11 @@ const styles = StyleSheet.create({
   },
   handleArea: {
     alignItems: 'center',
-    paddingTop: spacing.md,
-    paddingBottom: spacing.lg,
+    paddingTop: spacing.sm + 2,
+    paddingBottom: spacing.md + 2,
   },
   handle: {
-    width: 40,
+    width: 36,
     height: 4,
     borderRadius: 2,
   },

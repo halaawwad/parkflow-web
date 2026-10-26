@@ -33,7 +33,7 @@ export function CarServiceMapStatus({
   const { colors } = useTheme();
   const preview = services.slice(0, 4);
   const remaining = Math.max(0, count - preview.length);
-  return <View style={[{ padding: 12, gap: 8, borderRadius: radius.xl, backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth * 2, borderColor: colors.border }, shadow.sm]}>
+  return <View style={[{ padding: 12, gap: 8, marginHorizontal: 8, marginBottom: 12, borderRadius: radius.xl, backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth * 2, borderColor: colors.border }, shadow.sm]}>
     <Card padding="sm" tone="brand" accessibilityLabel={t('warning.entry')} onPress={() => router.push('/vehicles/warning-check')}>
       <AppText variant="title">{t('warning.entry')}</AppText>
       {!compact ? <AppText variant="caption">{t('warning.entryBody')}</AppText> : null}

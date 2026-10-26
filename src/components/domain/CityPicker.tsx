@@ -70,7 +70,8 @@ function CityRow({ icon, label, value, placeholder, onPress, testID }: {
       accessibilityLabel={`${label}: ${value}`}
       style={[styles.row, { flexDirection: row }]}
     >
-      {icon}
+      {/* A fixed slot so the ring and the pin centre on one axis and the labels align. */}
+      <View style={{ width: 20, alignItems: 'center' }}>{icon}</View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <AppText variant="caption" color="textTertiary">{label}</AppText>
         <AppText variant="title" color={placeholder ? 'textSecondary' : 'text'} numberOfLines={1}>{value}</AppText>
@@ -157,10 +158,10 @@ export function CityRoutePicker({ from, to, onChangeFrom, onChangeTo, allowAny }
 }
 
 const styles = StyleSheet.create({
-  box: { borderRadius: radius.xl, borderWidth: StyleSheet.hairlineWidth * 2, overflow: 'visible' },
+  box: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth * 2, overflow: 'visible' },
   row: { alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, minHeight: 64 },
   divider: { height: StyleSheet.hairlineWidth * 2, marginHorizontal: spacing.lg },
-  dot: { width: 14, height: 14, borderRadius: 7, borderWidth: 3, marginHorizontal: 1 },
+  dot: { width: 14, height: 14, borderRadius: 7, borderWidth: 3 },
   swap: { position: 'absolute', top: '50%', marginTop: -18, width: 36, height: 36, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth * 2, alignItems: 'center', justifyContent: 'center' },
   option: { alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.lg, minHeight: 52 },
   optionIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },

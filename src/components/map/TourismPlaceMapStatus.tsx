@@ -32,7 +32,7 @@ export function TourismPlaceMapStatus({
   const preview = places.slice(0, 4);
   const remaining = Math.max(0, count - preview.length);
   const categoryLabel = categories.length === 1 ? t(`tourism.category.${categories[0]}`) : t('tourism.allCategories');
-  return <View style={[{ padding: 12, gap: 8, borderRadius: radius.xl, backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth * 2, borderColor: colors.border }, shadow.sm]}>
+  return <View style={[{ padding: 12, gap: 8, marginHorizontal: 8, marginBottom: 12, borderRadius: radius.xl, backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth * 2, borderColor: colors.border }, shadow.sm]}>
     <View style={{ flexDirection: row, alignItems: 'center', gap: 8 }}>
       {loading ? <ActivityIndicator size="small" color={colors.brand} /> : null}
       <AppText variant="caption" style={{ flex: 1 }}>

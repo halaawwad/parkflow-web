@@ -16,6 +16,9 @@ import { typeFace, maxFontSizeMultiplier } from '@/theme/typography';
 import { duration } from '@/theme/motion';
 import { useLocale } from '@/hooks/useLocale';
 
+/** Web: the field draws its own focus border and halo, so the global outline steps aside. */
+const OWN_FOCUS = { dataSet: { ownfocus: 'true' } } as object;
+
 export interface TextFieldProps extends Omit<TextInputProps, 'style'> {
   label?: string;
   hint?: string;
@@ -103,6 +106,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
 
         <TextInput
           ref={ref}
+          {...OWN_FOCUS}
           style={{
             flex: 1,
             // Without an explicit 0, the web build gives the input a

@@ -1,5 +1,5 @@
 import { Accessibility, CircleParking } from 'lucide-react-native';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
 import { AppText, PressableScale } from '@/components/ui';
 import { availabilityTone } from './ZoneMarker';
@@ -42,12 +42,11 @@ export function CompactZoneCard({ item, onPress }: { item: NearbyZone; onPress: 
         flexDirection: row,
         alignItems: 'center',
         gap: spacing.md,
-        paddingVertical: spacing.md,
+        paddingVertical: spacing.sm + 2,
         paddingHorizontal: spacing.md,
         borderRadius: radius.lg,
-        backgroundColor: colors.surface,
-        borderWidth: StyleSheet.hairlineWidth * 2,
-        borderColor: colors.border,
+        // A soft tray rather than a bordered card: it already sits inside a panel.
+        backgroundColor: colors.background,
       }}
     >
       <View>
@@ -58,7 +57,7 @@ export function CompactZoneCard({ item, onPress }: { item: NearbyZone; onPress: 
             borderRadius: radius.md,
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: colors.brandSofter,
+            backgroundColor: colors.surface,
           }}
         >
           <CircleParking size={18} color={colors.brand} strokeWidth={2} />
@@ -85,7 +84,7 @@ export function CompactZoneCard({ item, onPress }: { item: NearbyZone; onPress: 
       </View>
 
       <View style={{ flex: 1, minWidth: 0, gap: spacing.xs }}>
-        <AppText variant="titleLg" numberOfLines={1}>
+        <AppText variant="title" numberOfLines={1}>
           {name}
         </AppText>
         <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.xs }}>
@@ -110,7 +109,7 @@ export function CompactZoneCard({ item, onPress }: { item: NearbyZone; onPress: 
           paddingVertical: spacing.xs,
           paddingHorizontal: spacing.sm,
           borderRadius: radius.pill,
-          backgroundColor: colors.brandSofter,
+          backgroundColor: colors.surface,
         }}
       >
         <AppText variant="label" color="brand" numeric numberOfLines={1}>

@@ -207,6 +207,16 @@ describe('Render cold starts and session preservation', () => {
     expect(storage.removeItem).not.toHaveBeenCalled();
   });
 
+  it('asks for navigation audio again without priority when an older API rejects the field', async () => {
+    const { httpVoiceService } = await import('../src/services/http/voiceService');
+    fetchMock
+      .mockResolvedValueOnce(response({ error: { code: 'VALIDATION', message: 'Unrecognized key' } }, 400))
+      .mockResolvedValueOnce(response({ mimeType: 'audio/wav', audio: 'UklGRg==' }));
+    await expect(httpVoiceService.speak('Turn left.', 'en', 'now')).resolves.toMatchObject({ mimeType: 'audio/wav' });
+    expect(JSON.parse(fetchMock.mock.calls[0]![1].body)).toMatchObject({ priority: 'now' });
+    expect(JSON.parse(fetchMock.mock.calls[1]![1].body)).not.toHaveProperty('priority');
+  });
+
   it('signs out only when refresh returns a confirmed backend UNAUTHORIZED rejection', async () => {
     fetchMock.mockResolvedValue(denied());
     await expect(client.refreshSession()).rejects.toMatchObject({ code: 'unauthorized' });

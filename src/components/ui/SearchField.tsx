@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { StyleSheet, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Search, X } from 'lucide-react-native';
 import { IconButton } from './IconButton';
@@ -33,6 +34,7 @@ export function SearchField({
 }: SearchFieldProps) {
   const { colors } = useTheme();
   const { row, textAlign, isRTL, t } = useLocale();
+  const [focused, setFocused] = useState(false);
   const inputTextAlign = value.length > 0 ? (/[\u0600-\u06ff]/.test(value) ? 'right' : 'left') : textAlign;
   const inputDirection = value.length > 0 ? (/[\u0600-\u06ff]/.test(value) ? 'rtl' : 'ltr') : undefined;
 
@@ -43,18 +45,20 @@ export function SearchField({
         {
           flexDirection: row,
           alignItems: 'center',
-          gap: spacing.md,
-          height: 52,
-          paddingHorizontal: spacing.lg,
+          gap: spacing.sm + 2,
+          height: 48,
+          paddingHorizontal: spacing.md + 2,
           borderRadius: radius.lg,
           backgroundColor: tone === 'surface' ? colors.surface : colors.surfaceAlt,
           borderWidth: StyleSheet.hairlineWidth * 2,
           borderColor: colors.border,
         },
         style,
+        // Focus shows on the field itself (the browser ring is suppressed below).
+        focused ? { borderColor: colors.brand } : null,
       ]}
     >
-      <Search size={20} color={colors.textTertiary} strokeWidth={2.2} />
+      <Search size={18} color={colors.textTertiary} strokeWidth={2.2} style={{ flexShrink: 0 }} />
       <TextInput
         value={value}
         onChangeText={onChangeText}
@@ -65,8 +69,13 @@ export function SearchField({
         returnKeyType="search"
         maxFontSizeMultiplier={maxFontSizeMultiplier}
         accessibilityLabel={placeholder}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        {...({ dataSet: { ownfocus: 'true' } } as object)}
         style={{
           flex: 1,
+          // Web inputs carry an intrinsic width; without this they push the icons out of the field.
+          minWidth: 0,
           color: colors.text,
           fontFamily: typeFace(isRTL, 'medium'),
           fontWeight: isRTL ? '500' : undefined,

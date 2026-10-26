@@ -72,7 +72,7 @@ function RidesSection({ bottom }: { bottom: number }) {
             icon={<CarFront size={30} color={colors.brand} />}
             title={t('ride.emptyTitle')}
             body={t('ride.emptyBody')}
-            action={{ label: t('ride.offer'), onPress: () => router.push('/rides/new') }}
+            action={{ label: t('ride.offer'), onPress: () => router.push('/rides/new'), variant: 'secondary' }}
           />
         ) : rides.data.map((ride) => <RideCard key={ride.id} ride={ride} onPress={() => router.push(`/rides/${ride.id}`)} />)}
     </ScrollView>
@@ -103,7 +103,7 @@ function SpotsSection({ bottom }: { bottom: number }) {
             icon={<House size={30} color={colors.brand} />}
             title={t('spot.emptyTitle')}
             body={t('spot.emptyBody')}
-            action={{ label: t('spot.listMine'), onPress: () => router.push('/spots/new') }}
+            action={{ label: t('spot.listMine'), onPress: () => router.push('/spots/new'), variant: 'secondary' }}
           />
         ) : spots.data.map((spot) => <SpotCard key={spot.id} spot={spot} onPress={() => router.push(`/spots/${spot.id}`)} />)}
     </ScrollView>

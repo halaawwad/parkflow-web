@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, TextInput, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { CircleParking, Footprints, Navigation, NotebookPen, Route, Search, X } from 'lucide-react-native';
 import { AppText, PressableScale } from '@/components/ui';
 import { useLocale } from '@/hooks/useLocale';
@@ -117,8 +117,12 @@ export function DestinationParkingPanel({
         {
           gap: spacing.sm,
           padding: spacing.md,
+          marginHorizontal: spacing.sm,
+          marginBottom: spacing.md,
           borderRadius: radius.xxl,
           backgroundColor: colors.surface,
+          borderWidth: StyleSheet.hairlineWidth * 2,
+          borderColor: colors.glassBorder,
         },
         shadow.md,
       ]}

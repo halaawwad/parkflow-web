@@ -55,10 +55,12 @@ export function MapTopBar({
               alignItems: 'center',
               alignSelf: row === 'row-reverse' ? 'flex-end' : 'flex-start',
               gap: spacing.sm,
-              height: 42,
-              paddingHorizontal: spacing.md,
+              height: 44,
+              paddingHorizontal: spacing.md + 2,
               borderRadius: radius.pill,
               backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: colors.glassBorder,
             },
             shadow.sm,
           ]}
@@ -100,7 +102,7 @@ export function MapTopBar({
             icon={<Bell size={19} color={colors.text} strokeWidth={2.2} />}
             onPress={onOpenNotifications}
             accessibilityLabel={t('notifications.title')}
-            size={42}
+            size={44}
           />
           {unreadCount > 0 ? (
             <View

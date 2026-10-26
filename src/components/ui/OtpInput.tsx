@@ -117,6 +117,7 @@ export function OtpInput({
         onChangeText={handleChange}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
+        {...({ dataSet: { ownfocus: 'true' } } as object)}
         autoFocus={autoFocus}
         editable={!disabled}
         keyboardType="number-pad"

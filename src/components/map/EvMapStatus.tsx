@@ -35,7 +35,7 @@ export function EvMapStatus({
   const active = Number(Boolean(filters.connectorType)) + Number(Boolean(filters.minPowerKw)) + Number(Boolean(filters.status));
   const previewStations = compact ? [] : stations.slice(0, 3);
 
-  return <View style={[{ padding: 12, gap: 8, borderRadius: radius.xl, backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth * 2, borderColor: colors.border }, shadow.sm]}>
+  return <View style={[{ padding: 12, gap: 8, marginHorizontal: 8, marginBottom: 12, borderRadius: radius.xl, backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth * 2, borderColor: colors.border }, shadow.sm]}>
     <View style={{ flexDirection: row, alignItems: 'center', gap: 8 }}>
       {loading ? <ActivityIndicator size="small" color={colors.brand} /> : null}
       <AppText variant="caption" style={{ flex: 1 }}>{loading ? t('ev.loading') : t('ev.count', { count })}</AppText>
