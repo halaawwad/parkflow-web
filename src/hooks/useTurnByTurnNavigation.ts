@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { AccessibilityInfo, AppState, Platform } from 'react-native';
-import * as Location from 'expo-location';
+import { watchLocation, type DevicePosition, type LocationWatch } from '@/utils/deviceLocation';
 import type { Locale } from '@/i18n';
 import { services } from '@/services';
 import type { GeoPoint, RouteRequestOptions, RouteResult, TravelMode } from '@/types';
@@ -20,7 +20,7 @@ import {
 } from '@/utils/navigation/session';
 import { markSpoken, planAnnouncement, routeSentences, upcomingSentences } from '@/utils/navigation/voiceScheduler';
 import { SpeechQueue, type SpeechQueueStatus } from '@/utils/navigation/speechQueue';
-import { chooseVoice, createNavigationVoice, keepScreenAwake, vibrateFor, type NavigationVoice, type VoiceChoice } from '@/utils/navigation/platform';
+import { chooseVoice, createNavigationVoice, keepScreenAwake, unlockWebAudio, vibrateFor, type NavigationVoice, type VoiceChoice } from '@/utils/navigation/platform';
 import { useNavigationSessionStore } from '@/store/navigationSessionStore';
 
 /**
@@ -42,14 +42,13 @@ const TICK_MS = 2_000;
 /** A route shown before starting is reused only if it begins this close to the first GPS fix. */
 const INITIAL_ROUTE_MAX_OFFSET = 60;
 
-function toFix(position: Location.LocationObject): LocationFix {
-  const { coords } = position;
+function toFix(position: DevicePosition): LocationFix {
   const finite = (value: number | null | undefined) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
   return {
-    point: { latitude: coords.latitude, longitude: coords.longitude },
-    accuracy: finite(coords.accuracy),
-    heading: finite(coords.heading),
-    speed: finite(coords.speed),
+    point: { latitude: position.latitude, longitude: position.longitude },
+    accuracy: finite(position.accuracy),
+    heading: finite(position.heading),
+    speed: finite(position.speed),
     timestamp: position.timestamp || Date.now(),
   };
 }
@@ -143,31 +142,19 @@ export function useTurnByTurnNavigation(locale: Locale) {
   const watching = (state.status === 'locating' || state.status === 'routing' || state.status === 'active' || state.status === 'rerouting') && !state.paused;
   useEffect(() => {
     if (!watching) return;
-    let subscription: Location.LocationSubscription | undefined;
+    let subscription: LocationWatch | undefined;
     let cancelled = false;
-    void (async () => {
-      try {
-        const permission = await Location.requestForegroundPermissionsAsync();
-        if (cancelled) return;
-        if (permission.status !== 'granted') {
-          dispatch({ type: 'permission-denied' });
-          return;
-        }
-        const sub = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
-          (position) => dispatch({ type: 'fix', fix: toFix(position), now: Date.now() }),
-          (reason) => {
-            if (/denied|permission/i.test(reason)) dispatch({ type: 'permission-denied' });
-            else dispatch({ type: 'location-unavailable' });
-          },
-        );
-        if (cancelled) sub.remove();
-        else subscription = sub;
-      } catch (error) {
-        if (cancelled) return;
-        dispatch(/denied|permission/i.test(String((error as Error)?.message)) ? { type: 'permission-denied' } : { type: 'location-unavailable' });
-      }
-    })();
+    void watchLocation(
+      (position) => {
+        if (!cancelled) dispatch({ type: 'fix', fix: toFix(position), now: Date.now() });
+      },
+      (error) => {
+        if (!cancelled) dispatch(error === 'denied' ? { type: 'permission-denied' } : { type: 'location-unavailable' });
+      },
+    ).then((watch) => {
+      if (cancelled) watch?.remove();
+      else subscription = watch;
+    });
     const tick = setInterval(() => dispatch({ type: 'tick', now: Date.now() }), TICK_MS);
     return () => {
       cancelled = true;
@@ -340,6 +327,8 @@ export function useTurnByTurnNavigation(locale: Locale) {
       requestRef.current++;
       inFlightRef.current = false;
       spokenRef.current.clear();
+      // Must run inside the Start tap: mobile browsers only allow sound a tap started.
+      unlockWebAudio();
       queue.reset();
       targetRef.current = { ...target };
       const profile = target.routeOptions?.profile ?? 'driving';
@@ -368,6 +357,7 @@ export function useTurnByTurnNavigation(locale: Locale) {
   }, [queue, say]);
 
   const resume = useCallback(() => {
+    unlockWebAudio();
     spokenRef.current.clear();
     say(systemPhrases.resumed(localeRef.current));
     dispatch({ type: 'resume', now: Date.now() });
@@ -375,6 +365,7 @@ export function useTurnByTurnNavigation(locale: Locale) {
 
   const setMuted = useCallback(
     (next: boolean) => {
+      if (!next) unlockWebAudio();
       queue.setMuted(next);
       setMutedState(next);
     },
@@ -383,6 +374,7 @@ export function useTurnByTurnNavigation(locale: Locale) {
 
   /** Repeats the current instruction; falls back to describing the next maneuver if nothing was said yet. */
   const repeat = useCallback(() => {
+    unlockWebAudio();
     const current = stateRef.current;
     if (queue.isMuted) {
       queue.setMuted(false);

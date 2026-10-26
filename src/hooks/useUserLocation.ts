@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import * as Location from 'expo-location';
 import type { GeoPoint } from '@/types';
+import { getCurrentLocation } from '@/utils/deviceLocation';
 
 export type LocationStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'unavailable';
 
@@ -15,29 +15,17 @@ export function useUserLocation(enabled = true) {
 
   const request = useCallback(async () => {
     setStatus('requesting');
-    try {
-      const { status: permission } = await Location.requestForegroundPermissionsAsync();
-      if (permission !== 'granted') {
-        setStatus('denied');
-        return undefined;
-      }
-
-      const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      const point: GeoPoint = {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-      };
-      setLocation(point);
-      setStatus('granted');
-      return point;
-    } catch {
-      // Permission dialogs and GPS both fail in plenty of ordinary ways
-      // (airplane mode, emulator without a fix). None should break the map.
-      setStatus('unavailable');
+    // Permission dialogs and GPS both fail in plenty of ordinary ways (airplane
+    // mode, no fix indoors, an emulator). None should break the map.
+    const result = await getCurrentLocation();
+    if (!result.ok) {
+      setStatus(result.error === 'denied' ? 'denied' : 'unavailable');
       return undefined;
     }
+    const point: GeoPoint = { latitude: result.position.latitude, longitude: result.position.longitude };
+    setLocation(point);
+    setStatus('granted');
+    return point;
   }, []);
 
   useEffect(() => {

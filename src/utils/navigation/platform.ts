@@ -178,45 +178,112 @@ export function keepScreenAwake(): () => void {
   };
 }
 
-/** HTMLAudioElement player for server-synthesised voice on web. */
+/**
+ * Mobile browsers (iOS Safari above all) only let a page make sound that a tap
+ * started. Navigation speaks seconds after "Start" is tapped — once GPS and the
+ * route are ready — so without this every prompt is silently dropped. Calling
+ * `unlockWebAudio()` inside the tap primes both outputs: a silent utterance for
+ * the browser voice and a silent clip on the one audio element that then plays
+ * every natural-voice sentence (a new element would need its own tap).
+ */
+let sharedAudio: HTMLAudioElement | undefined;
+let silentClip: string | undefined;
+
+function webAudio(): HTMLAudioElement | undefined {
+  if (Platform.OS !== 'web' || typeof Audio === 'undefined') return undefined;
+  sharedAudio ??= new Audio();
+  return sharedAudio;
+}
+
+/** 0.1 s of silence as a WAV object URL, built once. */
+function silence(): string {
+  if (silentClip) return silentClip;
+  const samples = 800;
+  const view = new DataView(new ArrayBuffer(44 + samples * 2));
+  const text = (offset: number, value: string) => [...value].forEach((c, i) => view.setUint8(offset + i, c.charCodeAt(0)));
+  text(0, 'RIFF');
+  view.setUint32(4, 36 + samples * 2, true);
+  text(8, 'WAVEfmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, 8000, true);
+  view.setUint32(28, 16000, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  text(36, 'data');
+  view.setUint32(40, samples * 2, true);
+  silentClip = URL.createObjectURL(new Blob([view.buffer], { type: 'audio/wav' }));
+  return silentClip;
+}
+
+/** Call synchronously inside a tap (Start, Resume, Repeat, Unmute). Safe to call often. */
+export function unlockWebAudio(): void {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  try {
+    const synth = window.speechSynthesis;
+    if (synth && typeof SpeechSynthesisUtterance !== 'undefined' && !synth.speaking) {
+      const primer = new SpeechSynthesisUtterance(' ');
+      primer.volume = 0;
+      synth.speak(primer);
+    }
+  } catch {
+    // The browser voice is optional.
+  }
+  try {
+    const audio = webAudio();
+    if (audio && (audio.paused || audio.ended)) {
+      audio.src = silence();
+      void audio.play().catch(() => undefined);
+    }
+  } catch {
+    // Natural voice falls back to the browser voice when audio cannot play.
+  }
+}
+
+/** Plays natural-voice sentences on the single, tap-unlocked audio element. */
 function createWebAudioPlayer(): AudioPlayer {
-  let current: HTMLAudioElement | undefined;
-  const detach = (audio: HTMLAudioElement) => {
-    audio.onended = null;
-    audio.onerror = null;
-    if (current === audio) current = undefined;
-  };
+  let token = 0;
+  let playing = false;
   return {
     play(source, callbacks) {
-      if (current) {
-        current.pause();
-        detach(current);
+      const audio = webAudio();
+      if (!audio) {
+        callbacks.onError(new Error('audio unavailable'));
+        return;
       }
-      const audio = new Audio(source);
-      current = audio;
+      const mine = ++token;
+      playing = true;
       audio.onended = () => {
-        detach(audio);
+        if (mine !== token) return;
+        playing = false;
         callbacks.onEnd();
       };
       audio.onerror = () => {
-        detach(audio);
+        if (mine !== token) return;
+        playing = false;
         callbacks.onError(audio.error ?? new Error('audio error'));
       };
+      audio.src = source;
       audio.play().catch((error: unknown) => {
-        // A pause from stop() rejects play(); that is not a failure to report.
-        if (current !== audio) return;
-        detach(audio);
+        // stop() or a newer sentence interrupted this one: not a failure to report.
+        if (mine !== token) return;
+        playing = false;
         callbacks.onError(error);
       });
     },
     stop() {
-      if (!current) return;
-      const audio = current;
-      detach(audio);
-      audio.pause();
+      token++;
+      playing = false;
+      const audio = sharedAudio;
+      if (audio) {
+        audio.onended = null;
+        audio.onerror = null;
+        audio.pause();
+      }
     },
     isPlaying() {
-      return Boolean(current && !current.paused && !current.ended);
+      return playing && Boolean(sharedAudio && !sharedAudio.paused && !sharedAudio.ended);
     },
   };
 }
