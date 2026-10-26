@@ -74,13 +74,19 @@ function errorCode(error: unknown): string {
  */
 function createWebSpeechEngine(synth: SpeechSynthesis, voice: () => VoiceChoice, rate: () => number): SpeechEngine {
   return {
-    speak(text, callbacks) {
+    speak(text, callbacks, options) {
       const choice = voice();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = choice.language;
       utterance.rate = rate();
-      const match = choice.voice ? synth.getVoices().find((v) => v.voiceURI === choice.voice) : undefined;
+      const voices = synth.getVoices();
+      // Obstacle warnings use a voice installed on the device: in testing a local voice
+      // started in ~110 ms and Chrome's network "Google" voice in ~435 ms.
+      const prefix = choice.language.slice(0, 2).toLowerCase();
+      const local = options?.immediate ? voices.find((v) => v.localService && v.lang.toLowerCase().startsWith(prefix)) : undefined;
+      const match = local ?? (choice.voice ? voices.find((v) => v.voiceURI === choice.voice) : undefined);
       if (match) utterance.voice = match;
+      utterance.onstart = () => callbacks.onStart?.();
       utterance.onend = () => callbacks.onDone();
       utterance.onerror = (event) => {
         if (STOP_CODES.test(event.error)) callbacks.onStopped();
@@ -111,6 +117,7 @@ export function createSpeechEngine(voice: () => VoiceChoice, rate: () => number)
         language: choice.language,
         voice: choice.voice,
         rate: rate(),
+        onStart: () => callbacks.onStart?.(),
         onDone: callbacks.onDone,
         onStopped: callbacks.onStopped,
         onError: (error) => {
@@ -345,7 +352,7 @@ export function createNavigationVoice(
   const fallback: SpeechEngine = {
     speak(text, callbacks, options) {
       // Obstacle warnings are the exception: heard at once in any voice beats silence.
-      if (naturalDevice() || options?.immediate) device.speak(text, callbacks);
+      if (naturalDevice() || options?.immediate) device.speak(text, callbacks, options);
       else callbacks.onDone();
     },
     stop: () => device.stop(),

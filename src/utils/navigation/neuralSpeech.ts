@@ -166,8 +166,9 @@ export function createNeuralSpeechEngine(options: NeuralSpeechOptions): NeuralSp
         clearWait();
         fallback.speak(text, callbacks, speakOptions);
       };
-      // An obstacle warning cannot wait for the network: the device voice says it now.
-      if ((disabled || speakOptions?.immediate) && !cache.has(text)) {
+      // An obstacle warning goes to the local device voice at once: no network, no
+      // audio element to load, so it starts as soon as the platform can speak.
+      if (speakOptions?.immediate || (disabled && !cache.has(text))) {
         useFallback();
         return;
       }

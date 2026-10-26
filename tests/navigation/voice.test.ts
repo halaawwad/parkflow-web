@@ -9,11 +9,12 @@ class FakeEngine implements SpeechEngine {
   log: string[] = [];
   options: ({ urgent?: boolean; immediate?: boolean } | undefined)[] = [];
   active?: { text: string; done: () => void; stopped: () => void; error: (e: unknown) => void };
-  speak(text: string, cb: { onDone: () => void; onStopped: () => void; onError: (e: unknown) => void }, options?: { urgent?: boolean; immediate?: boolean }) {
+  speak(text: string, cb: { onDone: () => void; onStopped: () => void; onError: (e: unknown) => void; onStart?: () => void }, options?: { urgent?: boolean; immediate?: boolean }) {
     if (this.active) throw new Error(`overlap: "${text}" while "${this.active.text}" is playing`);
     this.log.push(text);
     this.options.push(options);
     this.active = { text, done: cb.onDone, stopped: cb.onStopped, error: cb.onError };
+    cb.onStart?.();
   }
   stop() {
     const active = this.active;
@@ -252,6 +253,25 @@ describe('hazard warnings in the speech queue', () => {
     engine.finish();
     expect(queue.repeat()).toBe(true);
     expect(engine.active?.text).toBe('Turn left.');
+  });
+
+  it('starts an urgent obstacle warning the moment it arrives, over a turn instruction, and reports when it started', () => {
+    const { engine, queue } = setup();
+    const started: string[] = [];
+    queue.enqueue({ text: 'In 30 meters, turn right.', priority: 'high', instruction: true, onStart: () => started.push('turn') });
+    queue.enqueue({ text: 'Stop, obstacle ahead.', priority: 'urgent', immediate: true, onStart: () => started.push('hazard') });
+    expect(engine.active?.text).toBe('Stop, obstacle ahead.');
+    expect(started).toEqual(['turn', 'hazard']);
+  });
+
+  it('drops a waiting urgent warning about an obstacle that is no longer there', () => {
+    const { engine, queue } = setup();
+    let present = true;
+    queue.enqueue({ text: 'Stop, obstacle ahead.', priority: 'urgent', immediate: true });
+    queue.enqueue({ text: 'Stop, obstacle ahead to the left.', priority: 'urgent', immediate: true, isCurrent: () => present });
+    present = false;
+    engine.finish();
+    expect(engine.log).toEqual(['Stop, obstacle ahead.']);
   });
 
   it('asks the voice to speak an obstacle warning immediately', () => {

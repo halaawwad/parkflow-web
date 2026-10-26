@@ -26,10 +26,15 @@ NavigationOverlay (walking + preference on)
   └─ ObstacleAwarenessPanel → src/hooks/useObstacleAwareness.ts
        ├─ src/utils/obstacles/camera.web.ts  getUserMedia rear camera + MediaPipe detector
        ├─ src/utils/obstacles/engine.ts      tracker → warning policy, reliability
-       │    ├─ tracker.ts    confidence ≥ 0.5, ≥ 3 frames, walking corridor, rough nearness
-       │    ├─ warnings.ts   cooldowns, phrases, status announcements
-       │    └─ quality.ts    dark / covered / blurred / slow / stalled camera
-       └─ nav.announce → SpeechQueue: urgent (hazard) > high (turns) > normal (info)
+       │    ├─ tracker.ts    per-class score floors, 2 consistent frames (3 if uncertain),
+       │    │                walking corridor, crossing / leaving / receding, early vs urgent,
+       │    │                optical-expansion time to contact when the signal is clean
+       │    ├─ warnings.ts   when to speak, short phrases, status announcements
+       │    ├─ quality.ts    dark / covered / blurred / slow / stalled camera, camera sway
+       │    ├─ pacing.ts     newest frame as fast as the device allows, rest when hot
+       │    └─ timing.ts     detection, speech start-up and total warning delay
+       └─ nav.announce → SpeechQueue: urgent (hazard) > high (turns) > normal (info);
+          obstacle warnings use the local device voice at once, never the network voice
 ```
 
 The obstacle engine never reads GPS or the route, and the navigation engine never reads the
@@ -66,12 +71,29 @@ using ParkFlow") needs Swift code in a native module and a Mac build.
   through `getUserMedia`): portrait → person 0.98; COCO val2017 #139 → 2 chairs, 2 potted plants,
   but **missed the small person in the background**; about 90–210 ms per frame, model ready in
   about 1.5–2 s. Phones will be slower. This is a single-image check, not an accuracy measurement.
-- Classes reported: person, bicycle, motorcycle, car, bus, truck, bench, chair, fire hydrant,
-  parking meter, stop sign, potted plant, dog. **Not detected:** poles in general, trees, walls,
-  barriers, holes, curbs, stairs or changes in level.
+- Classes reported: person, bicycle, motorcycle, car, bus, truck, bench, chair, dining table,
+  potted plant, fire hydrant, parking meter, stop sign, dog, cat, horse, sheep, cow. An obstacle
+  whose type is unclear is called "obstacle". **Not detected:** poles in general, trees, walls,
+  barriers, holes, curbs, stairs, glass or changes in level.
+
+## Warnings
+
+- **Early** — "انتبه، شخص أمامك." / "Careful, person ahead." Once per obstacle, as soon as it is
+  confirmed in the walking corridor and tall enough (≥ 35 % of the frame) or closing in. Off-centre:
+  "… جهة اليمين" / "… to the right".
+- **Urgent** — "توقف، عائق أمامك." / "Stop, obstacle ahead." When close by size (and not walking
+  away), or when optical expansion gives a time to contact within measured delay + 0.6 s speech
+  + 1.5 s reaction. Cuts off any guidance sentence at once; repeated every 6 s while it lasts.
+- Peripheral obstacles are ignored unless moving into the path; obstacles stepping out of the
+  path are ignored; a warning still waiting after 1–1.5 s, or about an obstacle that has gone, is
+  dropped. Nothing ever says the way is clear, and no distance or time is ever spoken.
+- Time to contact is used only when the camera is steady, the box is not cut off and growth fits
+  cleanly. On real handheld footage that was rarely the case, so in practice warnings rest on
+  box size, consistency over frames and position — conservative evidence, not distance.
 - Frames stay on the device; nothing is recorded, stored or uploaded. The browser downloads the
   WebAssembly runtime (jsDelivr), the 4.6 MB model and the self-test photo (Google Cloud Storage).
-- About 2–6 frames a second; slower when the model is slow or the battery is below 20 %.
+- Frames are analysed back to back with a rest of half the inference time (more on low battery or
+  when inference slows down, a sign of heat).
 
 ## Tuning that still needs real-device calibration
 

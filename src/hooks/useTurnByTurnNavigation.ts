@@ -144,10 +144,10 @@ export function useTurnByTurnNavigation(locale: Locale) {
 
   /** Speaks (unless muted or backgrounded) and mirrors the message to assistive technology. */
   const say = useCallback(
-    (text: string, options: { priority?: SpeechPriority; instruction?: boolean; isCurrent?: () => boolean; immediate?: boolean } = {}) => {
+    (text: string, options: { priority?: SpeechPriority; instruction?: boolean; isCurrent?: () => boolean; immediate?: boolean; onStart?: () => void } = {}) => {
       setLiveMessage(text);
       if (backgroundRef.current) return;
-      queue.enqueue({ text, priority: options.priority, instruction: options.instruction, isCurrent: options.isCurrent, immediate: options.immediate });
+      queue.enqueue({ text, priority: options.priority, instruction: options.instruction, isCurrent: options.isCurrent, immediate: options.immediate, onStart: options.onStart });
       // A screen-reader user with voice muted still hears guidance through their reader.
       if (queue.isMuted && screenReaderRef.current && Platform.OS !== 'web') {
         AccessibilityInfo.announceForAccessibility(text);
@@ -449,7 +449,7 @@ export function useTurnByTurnNavigation(locale: Locale) {
    * awareness) through the guidance queue, so two voices never overlap.
    */
   const announce = useCallback(
-    (text: string, priority: SpeechPriority = 'normal', options: { immediate?: boolean; isCurrent?: () => boolean } = {}) =>
+    (text: string, priority: SpeechPriority = 'normal', options: { immediate?: boolean; isCurrent?: () => boolean; onStart?: () => void } = {}) =>
       say(text, { priority, ...options }),
     [say],
   );

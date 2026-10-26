@@ -1,3 +1,5 @@
+import type { CameraShift } from './tracker';
+
 /**
  * Whether the camera can be trusted right now. A dark, covered, blurred or
  * stalled camera sees nothing — which must never be mistaken for a clear
@@ -21,6 +23,35 @@ export function toGray(rgba: ArrayLike<number>): Uint8Array {
     gray[i] = Math.round(0.299 * rgba[i * 4]! + 0.587 * rgba[i * 4 + 1]! + 0.114 * rgba[i * 4 + 2]!);
   }
   return gray;
+}
+
+/**
+ * Whole-image shift between two greyscale thumbnails — the camera swaying or
+ * turning — found by trying small offsets and keeping the one that matches
+ * best. Fractions of the frame; positive dx means the picture moved right.
+ * Lets the tracker tell an obstacle moving from the walker's own sway.
+ */
+export function estimateShift(previous: ArrayLike<number>, current: ArrayLike<number>, width: number, height: number, maxShift = 4): CameraShift {
+  let best = Number.POSITIVE_INFINITY;
+  let bestX = 0;
+  let bestY = 0;
+  for (let dy = -maxShift; dy <= maxShift; dy++) {
+    for (let dx = -maxShift; dx <= maxShift; dx++) {
+      let sum = 0;
+      for (let y = maxShift; y < height - maxShift; y++) {
+        for (let x = maxShift; x < width - maxShift; x++) {
+          sum += Math.abs(current[y * width + x]! - previous[(y - dy) * width + (x - dx)]!);
+        }
+      }
+      // Prefer no movement on a tie, so a featureless picture never invents a shift.
+      if (sum < best || (sum === best && dx === 0 && dy === 0)) {
+        best = sum;
+        bestX = dx;
+        bestY = dy;
+      }
+    }
+  }
+  return { dx: bestX / width, dy: bestY / height };
 }
 
 export function measureFrame(gray: ArrayLike<number>, width: number, height: number): FrameQuality {

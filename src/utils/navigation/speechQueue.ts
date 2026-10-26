@@ -15,10 +15,11 @@
 export interface SpeechEngine {
   speak(
     text: string,
-    callbacks: { onDone: () => void; onStopped: () => void; onError: (error: unknown) => void },
+    /** onStart, where the platform reports it, fires when audio actually begins. */
+    callbacks: { onDone: () => void; onStopped: () => void; onError: (error: unknown) => void; onStart?: () => void },
     /**
      * Urgent prompts ("Turn right") must start at once; routine ones may wait briefly for better audio.
-     * Immediate ones (obstacle warnings) never wait for audio that is not ready.
+     * Immediate ones (obstacle warnings) use the local device voice straight away, never the network.
      */
     options?: { urgent?: boolean; immediate?: boolean },
   ): void;
@@ -43,6 +44,8 @@ export interface SpeechRequest {
   isCurrent?: () => boolean;
   /** Play with whatever voice is ready now (obstacle warnings: late is useless). */
   immediate?: boolean;
+  /** Called when this sentence starts to be heard (or is handed to a voice that cannot say when). */
+  onStart?: () => void;
 }
 
 export interface SpeechQueueStatus {
@@ -178,6 +181,9 @@ export class SpeechQueue {
     this.setStatus({ speaking: true });
     try {
       this.engine.speak(request.text, {
+        onStart: () => {
+          if (token === this.token) request.onStart?.();
+        },
         onDone: () => {
           if (token === this.token && this.status.blocked) this.setStatus({ blocked: false });
           this.finish(token);

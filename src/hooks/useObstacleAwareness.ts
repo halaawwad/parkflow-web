@@ -4,6 +4,7 @@ import type { Locale } from '@/i18n';
 import { ObstacleAwarenessEngine } from '@/utils/obstacles/engine';
 import { startObstacleCamera, type ObstacleCamera, type ObstacleCameraFailure } from '@/utils/obstacles/camera';
 import { describeObstacles, statusAnnouncement, type AnnouncementPriority, type ObstacleStatus, type ObstacleUnavailable } from '@/utils/obstacles/warnings';
+import { WarningTimings } from '@/utils/obstacles/timing';
 
 /**
  * Camera obstacle awareness for a walking session. Runs only while `enabled`,
@@ -13,7 +14,7 @@ import { describeObstacles, statusAnnouncement, type AnnouncementPriority, type 
 
 const TICK_MS = 1_000;
 /** A warning still waiting after this long describes a scene that has moved on. */
-const STALE_WARNING_MS = 2_000;
+const STALE_MS = { urgent: 1_000, early: 1_500 };
 
 export function useObstacleAwareness({
   enabled,
@@ -22,8 +23,10 @@ export function useObstacleAwareness({
 }: {
   enabled: boolean;
   locale: Locale;
-  announce: (text: string, priority: AnnouncementPriority, options?: { immediate?: boolean; isCurrent?: () => boolean }) => void;
+  announce: (text: string, priority: AnnouncementPriority, options?: { immediate?: boolean; isCurrent?: () => boolean; onStart?: () => void }) => void;
 }) {
+  /** Detection, speech start-up and total delay of warnings on this device. */
+  const timingsRef = useRef(new WarningTimings());
   const [status, setStatusState] = useState<ObstacleStatus>({ state: 'off' });
   const [paused, setPaused] = useState(false);
   /** Bumped by "try again" after a camera or model error. */
@@ -90,10 +93,19 @@ export function useObstacleAwareness({
       if (output.warning) {
         // Close and in the path cuts in over everything; the rest waits behind a turn
         // instruction, and is dropped rather than read out once it is stale.
-        const at = Date.now();
+        const decidedAt = Date.now();
+        const { level, obstacle } = output.warning;
         announceRef.current(describeObstacles(output.warning, localeRef.current), output.warning.priority, {
           immediate: true,
-          isCurrent: () => Date.now() - at <= STALE_WARNING_MS,
+          // Dropped rather than said late, or about an obstacle that has gone.
+          isCurrent: () => Date.now() - decidedAt <= STALE_MS[level] && engine.isRelevant(obstacle.trackId, level),
+          onStart: () => {
+            const timings = timingsRef.current;
+            timings.record({ firstSeenAt: obstacle.firstSeenAt, frameAt: frame.at, decidedAt, speechAt: Date.now() });
+            const latency = timings.latencySeconds();
+            if (latency !== undefined) engine.setLatency(latency);
+            if (__DEV__) console.info('[obstacles] warning timing', timings.summary());
+          },
         });
       }
       setStatus(output.reliability.reliable ? { state: 'active' } : { state: 'unreliable', reason: output.reliability.reason! });

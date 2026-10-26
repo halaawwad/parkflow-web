@@ -1,174 +1,213 @@
 import { describe, expect, it } from 'vitest';
-import { ObstacleTracker, iou, type Box, type FrameDetection, type ObstacleAssessment } from '@/utils/obstacles/tracker';
-import { measureFrame, ReliabilityMonitor, frameProblem, toGray } from '@/utils/obstacles/quality';
+import { ObstacleTracker, TRACKING, iou, type Box, type CameraShift, type FrameDetection, type ObstacleAssessment } from '@/utils/obstacles/tracker';
+import { estimateShift, measureFrame, ReliabilityMonitor, frameProblem, toGray } from '@/utils/obstacles/quality';
 import { WarningPolicy, describeObstacles, obstaclePhrases, statusAnnouncement, type ObstacleAnnouncement, type ObstacleStatus } from '@/utils/obstacles/warnings';
 import { ObstacleAwarenessEngine, type ObstacleFrame } from '@/utils/obstacles/engine';
 import { FramePacer } from '@/utils/obstacles/pacing';
+import { WarningTimings } from '@/utils/obstacles/timing';
 
 /**
  * Obstacle awareness logic on SYNTHETIC detections. These check thresholds,
- * tracking, confirmation, priorities and cooldowns; they say nothing about how
- * well the real model detects obstacles — that is measured separately on
- * annotated images and still needs supervised tests on devices.
+ * tracking, confirmation, warning timing and priorities; they say nothing
+ * about how well the real model sees obstacles — that is measured separately
+ * on annotated footage and still needs supervised tests on a phone.
  */
 
 const FRAME_MS = 200;
 /** In the path, mid-distance. */
-const ahead: Box = { x: 0.4, y: 0.4, width: 0.2, height: 0.3 };
-/** In the path, tall enough to be near. */
-const near: Box = { x: 0.35, y: 0.4, width: 0.3, height: 0.55 };
-/** In the path, filling most of the frame. */
-const huge: Box = { x: 0.25, y: 0.15, width: 0.5, height: 0.82 };
-const rightNear: Box = { x: 0.72, y: 0.4, width: 0.26, height: 0.55 };
-const leftAhead: Box = { x: 0.02, y: 0.45, width: 0.2, height: 0.3 };
+const ahead: Box = { x: 0.4, y: 0.4, width: 0.2, height: 0.4 };
+/** In the path, tall enough to count as close. */
+const close: Box = { x: 0.3, y: 0.3, width: 0.4, height: 0.65 };
+/** Beside the path on the right, large. */
+const peripheral: Box = { x: 0.8, y: 0.3, width: 0.18, height: 0.65 };
 const det = (label: string, box: Box, score = 0.75): FrameDetection => ({ label, score, box });
 const person = (box: Box, score = 0.75) => det('person', box, score);
 const good = { brightness: 120, contrast: 40, sharpness: 12 };
 
-function feed(tracker: ObstacleTracker, frames: FrameDetection[][], start = 0) {
-  return frames.map((detections, i) => tracker.update(detections, start + i * FRAME_MS));
+function feed(tracker: ObstacleTracker, frames: FrameDetection[][], { start = 0, step = FRAME_MS, shift }: { start?: number; step?: number; shift?: CameraShift } = {}) {
+  return frames.map((detections, i) => tracker.update(detections, start + i * step, shift));
 }
 const repeat = (n: number, detections: FrameDetection[]) => Array.from({ length: n }, () => detections);
+/** A box of side `size` (square-ish, grows downward and outward from the middle), as an approaching person. */
+const centred = (size: number): Box => ({ x: 0.5 - size / 2, y: 0.55 - size / 2, width: size, height: size * 1.1 });
 
-describe('obstacle confirmation', () => {
-  it('confirms a confident detection on its second frame by default', () => {
+describe('confirmation and false positives', () => {
+  it('stays silent on an empty scene', () => {
+    expect(feed(new ObstacleTracker(), repeat(10, [])).flat()).toEqual([]);
+  });
+
+  it('needs two consistent frames for an ordinary detection', () => {
     const results = feed(new ObstacleTracker(), repeat(2, [person(ahead)]));
     expect(results[0]).toEqual([]);
-    expect(results[1]).toMatchObject([{ label: 'person', direction: 'ahead', proximity: 'ahead', hits: 2 }]);
-  });
-
-  it('warns from the first frame when a very confident detection is close and straight ahead', () => {
-    const [first] = feed(new ObstacleTracker(), [[person(near, 0.9)]]);
-    expect(first).toMatchObject([{ proximity: 'near', direction: 'ahead', hits: 1 }]);
-  });
-
-  it('never calls an obstacle very close from a single frame', () => {
-    const results = feed(new ObstacleTracker(), repeat(2, [person(huge, 0.95)]));
-    expect(results[0]).toMatchObject([{ proximity: 'near' }]);
-    expect(results[1]).toMatchObject([{ proximity: 'very-close' }]);
-  });
-
-  it('does not take the one-frame shortcut beside the path or for a smaller obstacle', () => {
-    expect(feed(new ObstacleTracker(), [[person(rightNear, 0.95)]])[0]).toEqual([]);
-    expect(feed(new ObstacleTracker(), [[person(ahead, 0.95)]])[0]).toEqual([]);
+    expect(results[1]).toMatchObject([{ label: 'person', direction: 'center', level: 'early', hits: 2 }]);
   });
 
   it('needs three frames for an uncertain detection', () => {
-    const results = feed(new ObstacleTracker(), repeat(3, [person(near, 0.45)]));
-    expect(results[0]).toEqual([]);
-    expect(results[1]).toEqual([]);
+    const results = feed(new ObstacleTracker(), repeat(3, [person(ahead, 0.5)]));
+    expect(results.slice(0, 2).flat()).toEqual([]);
     expect(results[2]).toHaveLength(1);
   });
 
-  it('ignores detections below the score floor and classes it does not support', () => {
-    expect(feed(new ObstacleTracker(), repeat(5, [person(near, 0.35)])).flat()).toEqual([]);
-    expect(feed(new ObstacleTracker(), repeat(5, [det('cup', huge, 0.95)])).flat()).toEqual([]);
+  it('is urgent from one frame only for a very confident, close obstacle straight ahead', () => {
+    expect(feed(new ObstacleTracker(), [[person(close, 0.9)]])[0]).toMatchObject([{ level: 'urgent', hits: 1 }]);
+    expect(feed(new ObstacleTracker(), [[person(close, 0.8)]])[0]).toEqual([]);
+    expect(feed(new ObstacleTracker(), [[person(ahead, 0.95)]])[0]).toEqual([]);
   });
 
   it('filters a one-frame false alarm', () => {
-    expect(feed(new ObstacleTracker(), [[person(near, 0.7)], [], [], []]).flat()).toEqual([]);
-  });
-});
-
-describe('obstacle tracking and position', () => {
-  it('keeps one identity as an obstacle moves, so it is not announced twice', () => {
-    const shifted = (dx: number): Box => ({ ...ahead, x: ahead.x + dx });
-    const results = feed(new ObstacleTracker(), [0, 0.02, 0.04, 0.06].map((dx) => [person(shifted(dx))]));
-    expect(results[1]![0]!.trackId).toBe(results[3]![0]!.trackId);
-    expect(iou(shifted(0), shifted(0.02))).toBeGreaterThan(0.3);
+    expect(feed(new ObstacleTracker(), [[person(close, 0.7)], [], [], []]).flat()).toEqual([]);
   });
 
-  it('keeps one identity when the model changes its mind about the type', () => {
-    const results = feed(new ObstacleTracker(), [[det('car', near)], [det('truck', near)], [det('car', near)]]);
-    expect(results[1]![0]!.trackId).toBe(results[2]![0]!.trackId);
+  it('does not confirm a box whose size jumps between frames', () => {
+    const results = feed(new ObstacleTracker(), [[person(ahead)], [person({ ...ahead, x: 0.35, width: 0.32, height: 0.5 })]]);
+    expect(results.flat()).toEqual([]);
+  });
+
+  it('holds less precise classes and small boxes to a higher score', () => {
+    expect(feed(new ObstacleTracker(), repeat(4, [det('dining table', ahead, 0.45)])).flat()).toEqual([]);
+    expect(feed(new ObstacleTracker(), repeat(4, [person(ahead, 0.45)])).at(-1)).toHaveLength(1);
+    const small: Box = { x: 0.45, y: 0.4, width: 0.12, height: 0.2 };
+    expect(feed(new ObstacleTracker(), repeat(4, [person(small, 0.45)])).flat()).toEqual([]);
+    expect(feed(new ObstacleTracker(), repeat(4, [det('cup', close, 0.95)])).flat()).toEqual([]);
   });
 
   it('says "obstacle" instead of guessing when the type is not clear', () => {
-    const flipping = feed(new ObstacleTracker(), [[det('car', near)], [det('truck', near)], [det('bus', near)], [det('car', near)]]);
+    const flipping = feed(new ObstacleTracker(), [[det('car', ahead)], [det('truck', ahead)], [det('bus', ahead)], [det('car', ahead)]]);
     expect(flipping.at(-1)![0]!.label).toBeUndefined();
-    const unsure = feed(new ObstacleTracker(), repeat(3, [det('chair', near, 0.55)]));
-    expect(unsure.at(-1)![0]!.label).toBeUndefined();
-    expect(feed(new ObstacleTracker(), repeat(2, [det('chair', near, 0.8)])).at(-1)![0]!.label).toBe('chair');
+    expect(feed(new ObstacleTracker(), repeat(2, [det('chair', ahead, 0.8)])).at(-1)![0]!.label).toBe('chair');
+  });
+});
+
+describe('walking corridor', () => {
+  it('ignores a large obstacle beside the path that is not moving into it', () => {
+    expect(feed(new ObstacleTracker(), repeat(8, [det('car', peripheral)])).flat()).toEqual([]);
   });
 
-  it('survives a brief miss but drops a track that disappears', () => {
-    const results = feed(new ObstacleTracker(), [[person(ahead)], [person(ahead)], [], [person(ahead)], [], [], [], [person(ahead)]]);
-    expect(results[3]).toHaveLength(1);
-    expect(results[7]).toEqual([]);
+  it('gives no early warning for a short, far obstacle that is not closing in', () => {
+    const far: Box = { x: 0.42, y: 0.5, width: 0.16, height: 0.25 };
+    expect(feed(new ObstacleTracker(), repeat(5, [person(far)])).flat()).toEqual([]);
   });
 
-  it('places obstacles left, ahead or right, and ignores far or side ones that are not near', () => {
-    expect(feed(new ObstacleTracker(), repeat(2, [det('car', rightNear)])).at(-1)).toMatchObject([{ direction: 'right', proximity: 'near' }]);
-    expect(feed(new ObstacleTracker(), repeat(2, [person(leftAhead)])).flat()).toEqual([]);
-    const horizon: Box = { x: 0.45, y: 0.3, width: 0.1, height: 0.15 };
-    expect(feed(new ObstacleTracker(), repeat(4, [person(horizon)])).flat()).toEqual([]);
+  it('ignores far-off obstacles near the horizon', () => {
+    const horizon: Box = { x: 0.45, y: 0.25, width: 0.1, height: 0.2 };
+    expect(feed(new ObstacleTracker(), repeat(5, [person(horizon)])).flat()).toEqual([]);
   });
 
-  it('notices an obstacle growing quickly as approaching, and raises its level', () => {
-    const box = (w: number): Box => ({ x: 0.5 - w / 2, y: 0.5, width: w, height: w * 1.2 });
-    const still = feed(new ObstacleTracker(), repeat(5, [person(box(0.32))]));
-    expect(still.at(-1)).toMatchObject([{ proximity: 'ahead', approaching: false }]);
-    const growing = feed(new ObstacleTracker(), [0.22, 0.25, 0.28, 0.32].map((w) => [person(box(w))]));
-    expect(growing.at(-1)).toMatchObject([{ proximity: 'near', approaching: true }]);
+  it('places in-path obstacles straight ahead or ahead to one side', () => {
+    expect(feed(new ObstacleTracker(), repeat(2, [person({ ...ahead, x: 0.52 })])).at(-1)).toMatchObject([{ direction: 'right' }]);
+    expect(feed(new ObstacleTracker(), repeat(2, [person({ ...ahead, x: 0.22 })])).at(-1)).toMatchObject([{ direction: 'left' }]);
   });
 
-  it('lists the most dangerous obstacle first', () => {
-    const results = feed(new ObstacleTracker(), repeat(2, [person(ahead), det('car', rightNear), det('chair', huge)]));
-    expect(results.at(-1)!.map((a) => a.label)).toEqual(['chair', 'car', 'person']);
+  it('reports someone stepping sideways into the path before they are in it', () => {
+    // Still fully beside the corridor (it starts at 0.75), but moving towards it.
+    const results = feed(new ObstacleTracker(), [0.92, 0.89, 0.86, 0.83].map((x) => [person({ x, y: 0.4, width: 0.12, height: 0.4 })]));
+    expect(results.at(-1)).toMatchObject([{ crossing: true, direction: 'right' }]);
+  });
+
+  it('ignores someone in the path who is stepping out of it', () => {
+    const results = feed(new ObstacleTracker(), [0.55, 0.6, 0.65, 0.7].map((x) => [person({ x, y: 0.4, width: 0.14, height: 0.4 })]));
+    expect(results.at(-1)).toEqual([]);
+  });
+
+  it('does not tell the walker to stop for someone close who is walking away', () => {
+    // Tall enough to count as close in every frame; only the steady shrinking says it is leaving.
+    const shrinking = [0.5, 0.47, 0.44, 0.41, 0.38].map((s) => [person({ x: 0.5 - s / 2, y: 0.97 - 1.6 * s, width: s, height: 1.6 * s })]);
+    const results = feed(new ObstacleTracker(), shrinking);
+    expect(shrinking.at(-1)![0]!.box.height).toBeGreaterThanOrEqual(TRACKING.urgentHeight);
+    expect(results.at(-1)).toMatchObject([{ level: 'early' }]);
+    const still = feed(new ObstacleTracker(), repeat(5, [person(close)]));
+    expect(still.at(-1)).toMatchObject([{ level: 'urgent' }]);
+  });
+
+  it('does not mistake the camera swinging for someone crossing', () => {
+    // The person stays put in the world; the picture slides because the camera turns.
+    const shift: CameraShift = { dx: -0.06, dy: 0 };
+    const results = feed(new ObstacleTracker(), [0.98, 0.92, 0.86, 0.8].map((x) => [person({ x, y: 0.4, width: 0.12, height: 0.4 })]), { shift });
+    expect(results.flat()).toEqual([]);
+  });
+
+  it('measures the camera shift between two frames', () => {
+    const w = 64, h = 48;
+    // Seeded noise: no repeating pattern, so only the true offset matches.
+    let seed = 7;
+    const noise = Array.from({ length: (w + 8) * h }, () => ((seed = (seed * 1103515245 + 12345) % 2147483648) >> 16) & 255);
+    const scene = (offset: number) => Uint8Array.from({ length: w * h }, (_, i) => noise[Math.floor(i / w) * (w + 8) + (i % w) - offset + 8]!);
+    expect(estimateShift(scene(0), scene(2), w, h)).toEqual({ dx: 2 / w, dy: 0 });
+    expect(estimateShift(new Uint8Array(w * h).fill(90), new Uint8Array(w * h).fill(90), w, h)).toEqual({ dx: 0, dy: 0 });
+  });
+});
+
+describe('approaching obstacles', () => {
+  /** Box size of something 6 m away when walking towards it at 1.3 m/s: size ∝ 1 / distance. */
+  const walkingTowards = (frames: number) => Array.from({ length: frames }, (_, i) => 1.2 / (6 - 1.3 * i * (FRAME_MS / 1000)));
+
+  it('estimates time to contact from steady growth and warns urgently in time', () => {
+    const sizes = walkingTowards(14);
+    const results = feed(new ObstacleTracker(), sizes.map((s) => [person(centred(s))]));
+    const last = results.at(-1)![0]!;
+    const trueTau = (6 - 1.3 * 13 * (FRAME_MS / 1000)) / 1.3;
+    expect(last.approaching).toBe(true);
+    expect(Math.abs(last.tau! - trueTau) / trueTau).toBeLessThan(0.3);
+    // Urgent once tau falls inside latency + speech + reaction, before the box alone looks close.
+    const urgentAt = results.findIndex((r) => r[0]?.level === 'urgent');
+    expect(urgentAt).toBeGreaterThan(-1);
+    expect(sizes[urgentAt]! * 1.1).toBeLessThan(TRACKING.urgentHeight);
+  });
+
+  it('allows for a slow device by warning earlier', () => {
+    const sizes = walkingTowards(14);
+    const fast = new ObstacleTracker();
+    const slow = new ObstacleTracker();
+    slow.setLatency(1.5);
+    const first = (tracker: ObstacleTracker) => feed(tracker, sizes.map((s) => [person(centred(s))])).findIndex((r) => r[0]?.level === 'urgent');
+    expect(first(slow)).toBeGreaterThan(-1);
+    expect(first(slow)).toBeLessThan(first(fast));
+  });
+
+  it('gives no time to contact when the growth is noisy', () => {
+    const noisy = [0.2, 0.26, 0.21, 0.27, 0.22, 0.28, 0.23];
+    const last = feed(new ObstacleTracker(), noisy.map((s) => [person(centred(s))])).at(-1)!;
+    expect(last.every((a) => a.tau === undefined)).toBe(true);
+  });
+
+  it('gives no time to contact while the camera swings, or when the box is cut off', () => {
+    const sizes = Array.from({ length: 8 }, (_, i) => 0.2 * (1 + 0.05 * i));
+    const swinging = feed(new ObstacleTracker(), sizes.map((s) => [person(centred(s))]), { shift: { dx: 0.05, dy: 0.02 } }).at(-1)!;
+    expect(swinging.every((a) => a.tau === undefined)).toBe(true);
+    const cut = feed(new ObstacleTracker(), sizes.map((s) => [person({ ...centred(s), y: 0 })])).at(-1)!;
+    expect(cut.every((a) => a.tau === undefined)).toBe(true);
   });
 });
 
 const a = (overrides: Partial<ObstacleAssessment> = {}): ObstacleAssessment => ({
-  trackId: 1, label: 'person', direction: 'ahead', proximity: 'ahead', approaching: false, score: 0.8, hits: 2, ...overrides,
+  trackId: 1, label: 'person', direction: 'center', level: 'early', approaching: false, crossing: false, box: ahead, score: 0.8, hits: 2, firstSeenAt: 0, ...overrides,
 });
 
-describe('obstacle announcements', () => {
-  it('announces a new obstacle at once and repeats it only after its interval', () => {
+describe('warning decisions', () => {
+  it('gives each obstacle one early warning and does not repeat it', () => {
     const policy = new WarningPolicy();
-    expect(policy.decide([a()], 0)?.primary.trackId).toBe(1);
-    expect(policy.decide([a()], 3_000)).toBeUndefined();
-    expect(policy.decide([a()], 12_000)?.primary.trackId).toBe(1);
+    const said = Array.from({ length: 150 }, (_, i) => policy.decide([a()], i * FRAME_MS)).filter(Boolean);
+    expect(said).toEqual([expect.objectContaining({ level: 'early', priority: 'high' })]);
   });
 
-  it('repeats a very close obstacle more often than one further away', () => {
+  it('warns urgently at once, even right after an early warning, and repeats while urgent', () => {
     const policy = new WarningPolicy();
-    expect(policy.decide([a({ proximity: 'very-close' })], 0)).toBeDefined();
-    expect(policy.decide([a({ proximity: 'very-close' })], 2_000)).toBeUndefined();
-    expect(policy.decide([a({ proximity: 'very-close' })], 3_000)).toBeDefined();
+    expect(policy.decide([a()], 0)?.level).toBe('early');
+    expect(policy.decide([a({ level: 'urgent' })], 200)).toMatchObject({ level: 'urgent', priority: 'urgent' });
+    expect(policy.decide([a({ level: 'urgent' })], 4_000)).toBeUndefined();
+    expect(policy.decide([a({ level: 'urgent' })], 6_200)?.level).toBe('urgent');
   });
 
-  it('speaks again straight away when an obstacle becomes more dangerous', () => {
-    const policy = new WarningPolicy();
-    expect(policy.decide([a()], 0)).toBeDefined();
-    expect(policy.decide([a({ proximity: 'near' })], 300)).toMatchObject({ priority: 'urgent' });
-    expect(policy.decide([a({ proximity: 'near', approaching: true })], 600)).toBeDefined();
-    // Settling back down and up again within the interval is not news.
-    expect(policy.decide([a({ proximity: 'near' })], 900)).toBeUndefined();
-    expect(policy.decide([a({ proximity: 'near', approaching: true })], 1_200)).toBeUndefined();
-  });
-
-  it('spaces out new obstacles of the same danger, but not a more dangerous one', () => {
+  it('spaces out early warnings and holds them back briefly after an urgent one', () => {
     const policy = new WarningPolicy();
     expect(policy.decide([a()], 0)).toBeDefined();
     expect(policy.decide([a(), a({ trackId: 2 })], 500)).toBeUndefined();
-    expect(policy.decide([a(), a({ trackId: 2 })], 1_600)?.primary.trackId).toBe(2);
-    expect(policy.decide([a({ trackId: 3, proximity: 'near' })], 1_700)?.primary.trackId).toBe(3);
-  });
-
-  it('picks the most dangerous obstacle and mentions one more in another direction', () => {
-    const policy = new WarningPolicy();
-    const chair = a({ trackId: 1, label: 'chair' });
-    const side = a({ trackId: 2, direction: 'left', proximity: 'near' });
-    const decision = policy.decide([chair, side], 0)!;
-    expect(decision.primary.trackId).toBe(2);
-    expect(decision.priority).toBe('high');
-    expect(decision.secondary?.trackId).toBe(1);
-  });
-
-  it('keeps an urgent warning short', () => {
-    const decision = new WarningPolicy().decide([a({ proximity: 'very-close' }), a({ trackId: 2, direction: 'left', proximity: 'near' })], 0)!;
-    expect(decision.priority).toBe('urgent');
-    expect(decision.secondary).toBeUndefined();
+    expect(policy.decide([a(), a({ trackId: 2 })], 900)?.obstacle.trackId).toBe(2);
+    expect(policy.decide([a({ trackId: 3, level: 'urgent' }), a({ trackId: 4 })], 5_000)?.obstacle.trackId).toBe(3);
+    // Just after the urgent warning, early news waits so the urgent words are heard...
+    expect(policy.decide([a({ trackId: 3, level: 'urgent' }), a({ trackId: 4 })], 5_400)).toBeUndefined();
+    // ...but not for as long as something stays urgent (in a crowd that can be never).
+    expect(policy.decide([a({ trackId: 3, level: 'urgent' }), a({ trackId: 4 })], 5_700)?.obstacle.trackId).toBe(4);
   });
 
   it('treats an obstacle that went away and came back as new', () => {
@@ -178,41 +217,47 @@ describe('obstacle announcements', () => {
     expect(policy.decide([a()], 6_500)).toBeDefined();
   });
 
-  it('stays silent when nothing is detected', () => {
+  it('stays silent when nothing is in the path', () => {
     expect(new WarningPolicy().decide([], 0)).toBeUndefined();
   });
 });
 
-describe('spoken obstacle descriptions', () => {
-  const say = (announcement: Partial<ObstacleAnnouncement> & { primary: ObstacleAssessment }, locale: 'ar' | 'en') =>
-    describeObstacles({ priority: 'high', ...announcement }, locale);
+describe('spoken warnings', () => {
+  const say = (announcement: Pick<ObstacleAnnouncement, 'level' | 'obstacle'>, locale: 'ar' | 'en') =>
+    describeObstacles({ priority: announcement.level === 'urgent' ? 'urgent' : 'high', ...announcement }, locale);
 
-  it('describes type, direction and closeness in Arabic', () => {
-    expect(say({ primary: a() }, 'ar')).toBe('يوجد شخص أمامك.');
-    expect(say({ primary: a({ label: 'car', direction: 'right', proximity: 'near' }) }, 'ar')).toBe('انتبه، سيارة قريبة على يمينك.');
-    expect(say({ primary: a({ label: undefined, proximity: 'very-close' }) }, 'ar')).toBe('تحذير، يوجد عائق قريب جدًا أمامك.');
-    expect(say({ primary: a({ label: 'chair' }), secondary: a({ trackId: 2, direction: 'left' }) }, 'ar')).toBe('يوجد كرسي أمامك وعلى يسارك شخص.');
-    expect(say({ primary: a({ label: 'car', proximity: 'near', approaching: true }) }, 'ar')).toBe('انتبه، سيارة تقترب أمامك.');
+  it('uses the short Arabic sentences', () => {
+    expect(say({ level: 'early', obstacle: a() }, 'ar')).toBe('انتبه، شخص أمامك.');
+    expect(say({ level: 'urgent', obstacle: a() }, 'ar')).toBe('توقف، عائق أمامك.');
+    expect(say({ level: 'early', obstacle: a({ label: undefined, direction: 'right' }) }, 'ar')).toBe('انتبه، عائق أمامك جهة اليمين.');
   });
 
-  it('describes the same in English', () => {
-    expect(say({ primary: a() }, 'en')).toBe('Person ahead.');
-    expect(say({ primary: a({ label: 'car', direction: 'right', proximity: 'near' }) }, 'en')).toBe('Careful, car close on your right.');
-    expect(say({ primary: a({ label: undefined, proximity: 'very-close' }) }, 'en')).toBe('Warning, obstacle very close ahead.');
-    expect(say({ primary: a({ label: 'chair' }), secondary: a({ trackId: 2, direction: 'left', label: undefined }) }, 'en')).toBe('Chair ahead, and an obstacle on your left.');
+  it('has the same in English', () => {
+    expect(say({ level: 'early', obstacle: a() }, 'en')).toBe('Careful, person ahead.');
+    expect(say({ level: 'urgent', obstacle: a({ direction: 'left' }) }, 'en')).toBe('Stop, obstacle ahead to the left.');
   });
 
-  it('never gives distances or says the way is clear', () => {
-    const all: string[] = [];
-    for (const proximity of ['ahead', 'near', 'very-close'] as const) {
-      for (const direction of ['left', 'ahead', 'right'] as const) {
-        for (const locale of ['ar', 'en'] as const) all.push(say({ primary: a({ proximity, direction, label: 'car' }) }, locale));
-      }
-    }
-    all.push(...Object.values(obstaclePhrases).flatMap((phrase) => [phrase('en'), phrase('ar')]));
-    const text = all.join(' ');
+  it('never gives distances or times, or says the way is clear', () => {
+    const text = [
+      ...(['early', 'urgent'] as const).flatMap((level) => (['left', 'center', 'right'] as const).flatMap((direction) =>
+        (['ar', 'en'] as const).map((locale) => say({ level, obstacle: a({ direction, tau: 2.4 }) }, locale)))),
+      ...Object.values(obstaclePhrases).flatMap((phrase) => [phrase('en'), phrase('ar')]),
+    ].join(' ');
     expect(text).not.toMatch(/\bclear\b|\bsafe to\b|step (?:left|right)|خالٍ|آمن للمرور/i);
-    expect(text).not.toMatch(/\d+\s*(?:m\b|metres|meters|متر)/i);
+    expect(text).not.toMatch(/\d/);
+  });
+});
+
+describe('warning timings', () => {
+  it('splits detection, speech start-up and total delay', () => {
+    const timings = new WarningTimings();
+    timings.record({ firstSeenAt: 1_000, frameAt: 1_200, decidedAt: 1_350, speechAt: 1_500 });
+    timings.record({ firstSeenAt: 2_000, frameAt: 2_200, decidedAt: 2_400, speechAt: 2_700 });
+    expect(timings.summary()).toMatchObject({ samples: 2 });
+    expect(timings.summary().detectionMs).toBe(400);
+    expect(timings.summary().speechStartMs).toBe(300);
+    expect(timings.summary().totalMs).toBe(700);
+    expect(timings.latencySeconds()).toBe(0.5);
   });
 });
 
@@ -293,21 +338,31 @@ describe('monitoring status announcements', () => {
   });
 });
 
+
 describe('obstacle awareness engine', () => {
   const frame = (at: number, detections: FrameDetection[], quality = good, inferenceMs = 60): ObstacleFrame => ({ at, detections, quality, inferenceMs });
 
-  it('warns on the second frame, then again as the person comes close', () => {
+  it('warns early on the second frame, then urgently as the person comes close', () => {
     const engine = new ObstacleAwarenessEngine();
     engine.reset(0);
     const outputs = [
-      ...Array.from({ length: 4 }, (_, i) => engine.frame(frame(i * FRAME_MS, [person(ahead)]))),
-      ...Array.from({ length: 3 }, (_, i) => engine.frame(frame(800 + i * FRAME_MS, [person(huge)]))),
+      ...Array.from({ length: 3 }, (_, i) => engine.frame(frame(i * FRAME_MS, [person(ahead)]))),
+      ...Array.from({ length: 3 }, (_, i) => engine.frame(frame(600 + i * FRAME_MS, [person(close)]))),
     ];
-    const spoken = outputs.map((o) => o.warning && describeObstacles(o.warning, 'en'));
-    expect(spoken[0]).toBeUndefined();
-    expect(spoken[1]).toBe('Person ahead.');
-    expect(spoken.filter(Boolean)).toEqual(['Person ahead.', 'Warning, person very close ahead.']);
-    expect(outputs.find((o) => o.warning?.primary.proximity === 'very-close')!.warning!.priority).toBe('urgent');
+    expect(outputs[0]!.warning).toBeUndefined();
+    const spoken = outputs.flatMap((o) => (o.warning ? [describeObstacles(o.warning, 'ar')] : []));
+    expect(spoken).toEqual(['انتبه، شخص أمامك.', 'توقف، عائق أمامك.']);
+  });
+
+  it('says a waiting warning is out of date once the obstacle has gone', () => {
+    const engine = new ObstacleAwarenessEngine();
+    engine.reset(0);
+    engine.frame(frame(0, [person(ahead)]));
+    const warning = engine.frame(frame(200, [person(ahead)])).warning!;
+    expect(engine.isRelevant(warning.obstacle.trackId, 'early')).toBe(true);
+    expect(engine.isRelevant(warning.obstacle.trackId, 'urgent')).toBe(false);
+    engine.frame(frame(400, []));
+    expect(engine.isRelevant(warning.obstacle.trackId, 'early')).toBe(false);
   });
 
   it('reports a dark camera instead of silence', () => {

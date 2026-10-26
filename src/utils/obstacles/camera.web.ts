@@ -1,6 +1,6 @@
 import type { ObjectDetector } from '@mediapipe/tasks-vision';
-import { OBSTACLE_LABELS, type FrameDetection } from './tracker';
-import { measureFrame, toGray } from './quality';
+import { OBSTACLE_LABELS, type CameraShift, type FrameDetection } from './tracker';
+import { estimateShift, measureFrame, toGray } from './quality';
 import { FramePacer } from './pacing';
 import type { ObstacleFrame } from './engine';
 import type { ObstacleCamera, ObstacleCameraFailure } from './camera';
@@ -145,11 +145,14 @@ export async function startObstacleCamera(
   canvas.height = THUMB_H;
   const context = canvas.getContext('2d', { willReadFrequently: true });
   const pacer = new FramePacer(await lowPower());
+  let previousGray: Uint8Array | undefined;
 
   const step = () => {
     if (stopped) return;
     let delay = NOT_READY_RETRY_MS;
     if (video.readyState >= 2 && video.videoWidth && video.videoHeight) {
+      // The moment the camera picture was taken, not when the model finished with it.
+      const capturedAt = Date.now();
       const started = performance.now();
       let detections: FrameDetection[];
       try {
@@ -171,11 +174,15 @@ export async function startObstacleCamera(
       }
       const inferenceMs = performance.now() - started;
       let quality = { brightness: 0, contrast: 0, sharpness: 0 };
+      let cameraShift: CameraShift | undefined;
       if (context) {
         context.drawImage(video, 0, 0, THUMB_W, THUMB_H);
-        quality = measureFrame(toGray(context.getImageData(0, 0, THUMB_W, THUMB_H).data), THUMB_W, THUMB_H);
+        const gray = toGray(context.getImageData(0, 0, THUMB_W, THUMB_H).data);
+        quality = measureFrame(gray, THUMB_W, THUMB_H);
+        if (previousGray) cameraShift = estimateShift(previousGray, gray, THUMB_W, THUMB_H);
+        previousGray = gray;
       }
-      onFrame({ detections, quality, inferenceMs, at: Date.now() });
+      onFrame({ detections, quality, inferenceMs, at: capturedAt, cameraShift });
       delay = pacer.next(inferenceMs);
     }
     timer = setTimeout(step, delay);

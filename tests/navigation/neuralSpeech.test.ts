@@ -202,13 +202,13 @@ describe('natural navigation voice', () => {
     expect(seen).toEqual([{ urgent: true, immediate: true }]);
   });
 
-  it('still uses natural audio for an obstacle warning that is already cached', async () => {
+  it('uses the local device voice for an obstacle warning even when natural audio is cached', async () => {
     const { engine, device, played } = setup();
-    engine.prefetch(['Person ahead.']);
+    engine.prefetch(['Stop, obstacle ahead.']);
     await flush();
-    engine.speak('Person ahead.', { onDone: () => undefined, onStopped: () => undefined, onError: () => undefined }, { urgent: true, immediate: true });
+    engine.speak('Stop, obstacle ahead.', { onDone: () => undefined, onStopped: () => undefined, onError: () => undefined }, { urgent: true, immediate: true });
+    expect(device).toEqual(['Stop, obstacle ahead.']);
     await flush();
-    expect(played).toEqual(['audio:Person ahead.']);
-    expect(device).toEqual([]);
+    expect(played).toEqual([]);
   });
 });
