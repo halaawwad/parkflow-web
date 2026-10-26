@@ -41,7 +41,6 @@ export function CheckpointLiveDetails({checkpoint:cp}:{checkpoint:CheckpointStat
   }catch(error){setFailure(error);setNeedsUnverified(true);setPendingConfirmation(reportId);}
   finally{setLocating(false);}
  };
- if(!cp.enabledForLiveReporting)return <AppText>{t('roads.needsReview')}</AppText>;
  return <View style={{gap:spacing.md}}>
   <AppText variant="caption">{t('roads.community')}</AppText>
   {(cp.directions??[]).map(d=><View key={d.id} style={{gap:spacing.xs}}>

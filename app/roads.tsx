@@ -104,9 +104,7 @@ export default function RoadAlertsScreen() {
                           </AppText>
                           <AppText variant="caption" color="textTertiary" numberOfLines={1}>
                             {t(checkpoint.kind==='road_gate'?'roads.roadGate':'roads.checkpointKind')}{' · '}
-                            {checkpoint.directions?.length ? t('roads.community') : !checkpoint.enabledForLiveReporting
-                              ? t('roads.needsReview')
-                              : checkpoint.assumed
+                            {checkpoint.directions?.length ? t('roads.community') : checkpoint.assumed
                               ? t(checkpoint.status==='conflicting'?'roads.conflicting':checkpoint.status==='unknown'?'roads.unknown':'roads.unconfirmed')
                               : t('roads.reportedAgo', {
                                   ago: ago(checkpoint.minutesSinceReport ?? 0),
@@ -158,9 +156,10 @@ export default function RoadAlertsScreen() {
                       paddingVertical: spacing.md,
                     }}
                   >
+                    {/* A single report is evidence, not a confirmed status; keep it neutral. */}
                     <StatusBadge
                       label={t(`roads.status.${item.status}` as const)}
-                      tone={STATUS_TONE[item.status]}
+                      tone="neutral"
                       size="sm"
                     />
                     <AppText variant="bodySm" numberOfLines={1} style={{ flex: 1 }}>
@@ -170,7 +169,7 @@ export default function RoadAlertsScreen() {
                         : ''}
                     </AppText>
                     <AppText variant="caption" color="textTertiary">
-                      {ago(minutesSince(item.observedAt??item.reportedAt))}
+                      {t('roads.unconfirmed')} · {ago(minutesSince(item.observedAt??item.reportedAt))}
                     </AppText>
                   </View>
                 </View>

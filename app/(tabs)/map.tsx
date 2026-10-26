@@ -457,7 +457,7 @@ export default function MapScreen() {
     () =>
       alerts.map((checkpoint) => ({
         id: checkpoint.id,
-        name: `${locale === 'ar' ? checkpoint.nameAr : checkpoint.nameEn}${!checkpoint.enabledForLiveReporting ? ` / ${t('roads.needsReview')}` : ''}`,
+        name: locale === 'ar' ? checkpoint.nameAr : checkpoint.nameEn,
         location: checkpoint.location,
         status: checkpoint.status,
         assumed: checkpoint.assumed,

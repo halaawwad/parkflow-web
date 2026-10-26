@@ -18,7 +18,7 @@ async function main() {
       create: { email: 'checkpoint-demo@parkflow.local', fullName: 'Demo checkpoint data', emailVerifiedAt: new Date() },
       update: {},
     });
-    const checkpoints = await tx.roadCheckpoint.findMany({ where: { active: true, enabledForLiveReporting: true } });
+    const checkpoints = await tx.roadCheckpoint.findMany({ where: { active: true } });
     const now = new Date();
     const cutoff = new Date(now.getTime() - freshnessMinutes * 60_000);
     const statuses = ['open', 'congested', 'severe', 'closed'];

@@ -20,8 +20,10 @@ function aggregate(rows: CheckpointReport[], now: number, persistentSample = fal
   }
   const fresh = [...people.values()];
   const statuses = new Set(fresh.map(r=>r.status));
-  const status = statuses.size > 1 ? 'conflicting' as const : fresh[0]?.status ?? 'unknown' as const;
+  // Two distinct GPS-verified people must agree; unverified reports never count, and any disagreement blocks confirmation.
   const confirmed = statuses.size === 1 && fresh.filter(r=>r.locationVerified).length >= 2;
+  // Unconfirmed evidence never becomes a public status; it stays visible only as individual reports.
+  const status = statuses.size > 1 ? 'conflicting' as const : confirmed ? fresh[0]!.status : 'unknown' as const;
   return { status, confidence: status === 'conflicting' ? 'conflicting' : !fresh.length ? 'unknown' : confirmed ? 'confirmed' : 'unconfirmed',
     reportCount: fresh.length, confirmationCount: statuses.size===1 ? Math.max(0,fresh.length-1) : 0,
     lastObservedAt: fresh[0]?.observedAt.toISOString() ?? null,
@@ -35,7 +37,8 @@ export async function checkpoints() {
   const sampleUser = env.NODE_ENV === 'development'
     ? await db.user.findUnique({where:{email:'checkpoint-demo@parkflow.local'},select:{id:true}})
     : null;
-  const rows = await db.roadCheckpoint.findMany({where:{active:true,enabledForLiveReporting:true},include:{reports:{where:{
+  // Every active location is public; administrator review is not required to list or report it.
+  const rows = await db.roadCheckpoint.findMany({where:{active:true},include:{reports:{where:{
     hidden:false,directionId:{in:checkpointPassages.map(p=>p.id)},
     AND:[
       {OR:[{observedAt:{gt:new Date(now-freshnessMs)}},...(sampleUser?[{userId:sampleUser.id,id:{startsWith:'demo-checkpoint-'}}]:[])]},
@@ -76,7 +79,7 @@ export async function observe(userId:string,checkpointId:string,input:Observatio
     await lock(tx,`checkpoint:${checkpointId}`);
     await lock(tx,`checkpoint-user:${userId}`);
     const cp=requireValue(await tx.roadCheckpoint.findFirst({where:{id:checkpointId,active:true}}));
-    assert(cp.enabledForLiveReporting && directionsOf(cp).some(d=>d.id===input.directionId),'VALIDATION','Reporting is disabled or entrance/exit was not selected');
+    assert(directionsOf(cp).some(d=>d.id===input.directionId),'VALIDATION','Select entrance or exit');
     const now=Date.now(), observed=Date.parse(input.observedAt);
     assert(Number.isFinite(observed) && (!cp.reviewedAt || observed>=cp.reviewedAt.getTime()) && observed<=now && observed>now-freshnessMs,'VALIDATION','Observation must be within the freshness window and not in the future');
     assert(!await tx.checkpointReport.findFirst({where:{userId,reportedAt:{gt:new Date(now-60000)}}}),'REPORT_COOLDOWN','Wait a minute before another checkpoint observation',429);

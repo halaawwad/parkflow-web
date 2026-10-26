@@ -40,8 +40,8 @@ beforeEach(async()=>{
  await redis.flushdb();
  await db.parkingOperator.create({data:{id:'op',name:'Test operator'}});
  await db.parkingZone.create({data:{id:'test-zone',operatorId:'op',code:'TEST-001',name:'Test parking',nameAr:'موقف تجريبي',city:'Ramallah',cityAr:'رام الله',latitude:31.9,longitude:35.2,kind:'garage',defaultMode:'start_stop',supportedModes:['start_stop','prepaid'],supportedEntryMethods:['manual','qr','zone_code','gps'],tariffs:{create:{id:'rate',name:'Test',hourlyRate:600,incrementMinutes:15,freeMinutes:5,minimumCharge:100,maxStayMinutes:180,validFrom:new Date('2020-01-01')}},operatingHours:{create:Array.from({length:7},(_,weekday)=>({weekday,opensAt:'00:00',closesAt:'00:00'}))}}});
- // Checkpoints have separate entrance and exit observations; approval is optional.
- await db.roadCheckpoint.create({data:{id:'cp',nameEn:'Test checkpoint',nameAr:'حاجز تجريبي',latitude:31.9,longitude:35.2,enabledForLiveReporting:true,directions:[{id:'entrance',nameAr:'المدخل',nameEn:'Entrance'},{id:'exit',nameAr:'المخرج',nameEn:'Exit'}]}});
+ // Checkpoints have separate entrance and exit observations; approval is optional, so the fixture stays unreviewed.
+ await db.roadCheckpoint.create({data:{id:'cp',nameEn:'Test checkpoint',nameAr:'حاجز تجريبي',latitude:31.9,longitude:35.2,directions:[{id:'entrance',nameAr:'المدخل',nameEn:'Entrance'},{id:'exit',nameAr:'المخرج',nameEn:'Exit'}]}});
  driver=await login('599111111');other=await login('599222222');vehicleId=(await vehicles.create(driver.user.id,{plateNumber:'1234567',type:'private'})).id;
 });
 describe('authentication and authorization',()=>{
@@ -132,6 +132,75 @@ describe('payments, violations, permits and notifications',()=>{
 const observation=(verified=false,directionId:'entrance'|'exit'='entrance')=>({directionId,observedAt:new Date().toISOString(),unverified:!verified,
  ...(verified?{location:{latitude:31.9,longitude:35.2,accuracy:10,capturedAt:new Date().toISOString()}}:{})});
 const reportCheckpoint=(userId:string,status:'open'|'closed',verified=false,directionId:'entrance'|'exit'='entrance')=>roads.reportRoad(userId,'cp',status,observation(verified,directionId));
+const passage=async(directionId:'entrance'|'exit')=>(await roads.checkpoints())[0]!.directions.find(d=>d.id===directionId)!;
+/** Moves an observation just outside the freshness window. */
+const expireReport=(id:string)=>db.checkpointReport.update({where:{id},data:{observedAt:new Date(Date.now()-(env.CHECKPOINT_FRESHNESS_MINUTES+1)*60000)}});
+describe('checkpoint confirmation rules',()=>{
+ it('lists unreviewed checkpoints with zero reports as unknown',async()=>{
+  const r=await request(app).get('/api/v1/roads/checkpoints').auth(driver.session.accessToken,{type:'bearer'});
+  expect(r.status).toBe(200);
+  expect(r.body).toHaveLength(1);
+  expect(r.body[0]).toMatchObject({id:'cp',enabledForLiveReporting:false,status:'unknown',assumed:true,reportCount:0,directions:[
+   {id:'entrance',status:'unknown',confidence:'unknown',reportCount:0},
+   {id:'exit',status:'unknown',confidence:'unknown',reportCount:0},
+  ]});
+ });
+ it('saves one report from any signed-in user without activation but never shows it as a status',async()=>{
+  const r=await request(app).post('/api/v1/roads/checkpoints/cp/reports').auth(driver.session.accessToken,{type:'bearer'}).send({status:'closed',...observation(true)});
+  expect(r.status).toBe(200);
+  expect(await db.checkpointReport.count({where:{checkpointId:'cp',status:'closed',locationVerified:true}})).toBe(1);
+  expect(await passage('entrance')).toMatchObject({status:'unknown',confidence:'unconfirmed',reportCount:1,reports:[{status:'closed',locationVerified:true}]});
+  expect((await roads.checkpoints())[0]).toMatchObject({status:'unknown',assumed:true});
+ });
+ it('confirms after two distinct verified matching observations, separately for entrance and exit',async()=>{
+  await reportCheckpoint(driver.user.id,'closed',true);
+  await reportCheckpoint(other.user.id,'closed',true);
+  expect(await passage('entrance')).toMatchObject({status:'closed',confidence:'confirmed'});
+  expect(await passage('exit')).toMatchObject({status:'unknown',confidence:'unknown'});
+  expect((await roads.checkpoints())[0]).toMatchObject({assumed:true});
+  const third=await login('599333333'),fourth=await login('599444444');
+  const original=await reportCheckpoint(third.user.id,'closed',true,'exit');
+  expect(await passage('exit')).toMatchObject({status:'unknown',confidence:'unconfirmed'});
+  const confirmed=await request(app).post('/api/v1/roads/checkpoints/cp/confirmations').auth(fourth.session.accessToken,{type:'bearer'}).send({...observation(true,'exit'),reportId:original.event.id});
+  expect(confirmed.status).toBe(200);
+  expect(await passage('exit')).toMatchObject({status:'closed',confidence:'confirmed'});
+  expect((await roads.checkpoints())[0]).toMatchObject({status:'closed',assumed:false});
+ });
+ it('does not count unverified reports toward confirmation',async()=>{
+  const third=await login('599333333'),fourth=await login('599444444');
+  await reportCheckpoint(driver.user.id,'closed',true);
+  await reportCheckpoint(other.user.id,'closed');
+  await reportCheckpoint(third.user.id,'closed');
+  expect(await passage('entrance')).toMatchObject({status:'unknown',confidence:'unconfirmed',reportCount:3});
+  await reportCheckpoint(fourth.user.id,'closed',true);
+  expect(await passage('entrance')).toMatchObject({status:'closed',confidence:'confirmed'});
+ });
+ it('never confirms conflicting observations',async()=>{
+  const third=await login('599333333');
+  await reportCheckpoint(driver.user.id,'closed',true);
+  await reportCheckpoint(other.user.id,'closed',true);
+  await reportCheckpoint(third.user.id,'open',true);
+  expect(await passage('entrance')).toMatchObject({status:'conflicting',confidence:'conflicting'});
+  expect((await roads.checkpoints())[0]).toMatchObject({status:'conflicting',assumed:true});
+ });
+ it('returns to unknown when verified evidence expires',async()=>{
+  const third=await login('599333333');
+  const reports=[await reportCheckpoint(driver.user.id,'closed',true),await reportCheckpoint(other.user.id,'closed',true),await reportCheckpoint(third.user.id,'closed',true)];
+  await expireReport(reports[0]!.event.id);
+  expect(await passage('entrance')).toMatchObject({status:'closed',confidence:'confirmed',reportCount:2});
+  await expireReport(reports[1]!.event.id);
+  expect(await passage('entrance')).toMatchObject({status:'unknown',confidence:'unconfirmed',reportCount:1});
+  await expireReport(reports[2]!.event.id);
+  expect(await passage('entrance')).toMatchObject({status:'unknown',confidence:'unknown',reportCount:0,expiresAt:null});
+ });
+ it('keeps unconfirmed closures out of routing',async()=>{
+  await reportCheckpoint(driver.user.id,'closed',true);
+  await reportCheckpoint(other.user.id,'closed',true,'exit');
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue({json:async()=>({code:'Ok',routes:[{distance:1000,duration:100,geometry:{coordinates:[[35.19,31.9],[35.21,31.9]]}},{distance:2000,duration:200,geometry:{coordinates:[[35.19,32],[35.21,32]]}}]})}));
+  const r=await routingService.getRoute({latitude:31.9,longitude:35.19},{latitude:31.9,longitude:35.21});
+  expect(r.distanceMeters).toBe(1000);expect(r.closuresOnRoute).toEqual([]);
+ });
+});
 describe('reports, trust and routing',()=>{
  it('uses deterministic road-report confidence thresholds',()=>{expect(calculateConfidence(0,0,false)).toEqual({confidenceScore:0.35,status:'unverified'});expect(calculateConfidence(2,0,false)).toEqual({confidenceScore:0.6499999999999999,status:'confirmed'});expect(calculateConfidence(0,2,false)).toMatchObject({confidenceScore:0,status:'disputed'});expect(calculateConfidence(2,0,true)).toEqual({confidenceScore:0,status:'expired'});});
  it('persists, bounds, votes, and blocks duplicate road-report votes',async()=>{const created=await roadReports.create(driver.user.id,{type:'accident',latitude:31.9,longitude:35.2,severity:'high',description:'Test event'});expect((await roadReports.active(other.user.id,{north:32,south:31,east:36,west:35}))[0]?.id).toBe(created.report.id);const voted=await roadReports.vote(other.user.id,created.report.id,'still_there');expect(voted).toMatchObject({confirmationCount:1,viewerVote:'still_there',canVote:false});await expect(roadReports.vote(other.user.id,created.report.id,'not_there')).rejects.toMatchObject({code:'ALREADY_VOTED'});});
@@ -143,13 +212,13 @@ describe('reports, trust and routing',()=>{
   const r=await reportCheckpoint(driver.user.id,'closed');
   expect(r.points?.state).toBe('pending');
   expect((await roads.checkpoints())[0]).toMatchObject({status:'unknown',assumed:true,directions:[
-   {id:'entrance',status:'closed',confidence:'unconfirmed',reportCount:1},
+   {id:'entrance',status:'unknown',confidence:'unconfirmed',reportCount:1},
    {id:'exit',status:'unknown',reportCount:0},
   ]});
   await reportCheckpoint(other.user.id,'open',false,'exit');
   expect((await roads.checkpoints())[0]).toMatchObject({status:'unknown',assumed:true,directions:[
-   {id:'entrance',status:'closed',reportCount:1},
-   {id:'exit',status:'open',confidence:'unconfirmed',reportCount:1},
+   {id:'entrance',status:'unknown',reportCount:1},
+   {id:'exit',status:'unknown',confidence:'unconfirmed',reportCount:1},
   ]});
   expect((await computeTrust(driver.user.id)).pendingPoints).toBe(5);
  });
