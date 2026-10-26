@@ -36,6 +36,8 @@ import { estimatedRemainingSeconds, guidanceReliable } from '@/utils/navigation/
 import { TravelModeToggle } from '../TravelModeToggle';
 import { followingManeuver } from '@/utils/navigation/voiceScheduler';
 import { ManeuverIcon } from './ManeuverIcon';
+import { ObstacleAwarenessPanel } from './ObstacleAwarenessPanel';
+import { usePreferencesStore } from '@/store/preferencesStore';
 
 /**
  * Everything drawn over the map while turn-by-turn navigation runs: the
@@ -296,6 +298,7 @@ export function NavigationOverlay({
   const { colors } = useTheme();
   const { t, locale, row, dateLocale, isRTL } = useLocale();
   const insets = useSafeAreaInsets();
+  const accessibleWalking = usePreferencesStore((s) => s.accessibleWalking);
   const [stepsOpen, setStepsOpen] = useState(false);
   // Ending a trip asks once: a stray tap while walking must not throw the route away.
   const [confirmingEnd, setConfirmingEnd] = useState(false);
@@ -357,6 +360,8 @@ export function NavigationOverlay({
           </Reveal>
         ) : null}
         {banner ? <Reveal key={String(banner.props.text)} offset={-6}>{banner}</Reveal> : null}
+        {/* Mounted only during walking guidance: leaving guidance always releases the camera. */}
+        {walking && accessibleWalking && state.status !== 'arrived' && state.status !== 'error' ? <ObstacleAwarenessPanel nav={nav} /> : null}
       </View>
 
       <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: bottomOffset + Math.max(insets.bottom, spacing.md), paddingHorizontal: spacing.md, gap: spacing.sm }}>

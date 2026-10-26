@@ -4,8 +4,10 @@
  * (the newest of each kind — an older one is stale by the time it could play),
  * the urgent one plays first, and a waiting prompt whose moment has passed is
  * dropped rather than read out late. Urgent prompts ("Turn right") cut off a
- * routine one. Every utterance has a watchdog because some browsers never fire
- * the end event, which would otherwise wedge the queue.
+ * routine one. Hazard warnings ("Stop. Obstacle close ahead") rank above both:
+ * they cut off anything, and a turn instruction they cut off is said again
+ * afterwards if it is still current. Every utterance has a watchdog because
+ * some browsers never fire the end event, which would otherwise wedge the queue.
  *
  * The engine is injected so the queue is testable without audio.
  */
@@ -22,7 +24,10 @@ export interface SpeechEngine {
   isSpeaking?(): boolean;
 }
 
-export type SpeechPriority = 'normal' | 'high';
+/** 'urgent' is reserved for immediate hazards; 'high' is turn guidance; 'normal' is information. */
+export type SpeechPriority = 'normal' | 'high' | 'urgent';
+const RANK: Record<SpeechPriority, number> = { normal: 0, high: 1, urgent: 2 };
+const rankOf = (request: SpeechRequest) => RANK[request.priority ?? 'normal'];
 
 export interface SpeechRequest {
   text: string;
@@ -71,7 +76,9 @@ function isBlockedError(error: unknown): boolean {
 
 export class SpeechQueue {
   private current?: { request: SpeechRequest; token: number; watchdog: unknown; startedAt: number };
-  private pending: { high?: SpeechRequest; normal?: SpeechRequest } = {};
+  private pending: { urgent?: SpeechRequest; high?: SpeechRequest; normal?: SpeechRequest } = {};
+  /** A guidance instruction a hazard warning cut off, to be said again once the warning ends. */
+  private interrupted?: SpeechRequest;
   private token = 0;
   private lastSpoken?: { text: string; at: number };
   private lastInstruction?: string;
@@ -95,26 +102,32 @@ export class SpeechQueue {
   enqueue(request: SpeechRequest): void {
     if (request.instruction) this.lastInstruction = request.text;
     if (this.muted) return;
+    const rank = rankOf(request);
     if (!request.force) {
       if (
         this.current?.request.text === request.text ||
+        this.pending.urgent?.text === request.text ||
         this.pending.high?.text === request.text ||
         this.pending.normal?.text === request.text
       ) return;
+      // A hazard that is still there may be repeated; its own cooldown limits how often.
       const last = this.lastSpoken;
-      if (last && last.text === request.text && this.timers.now() - last.at < DUPLICATE_WINDOW_MS) return;
+      if (rank < RANK.urgent && last && last.text === request.text && this.timers.now() - last.at < DUPLICATE_WINDOW_MS) return;
     }
     if (!this.current) {
       this.play(request);
       return;
     }
-    const urgent = (request.priority ?? 'normal') === 'high';
-    if (urgent && (this.current.request.priority ?? 'normal') !== 'high') {
+    const currentRank = rankOf(this.current.request);
+    // Hazards cut off anything below them; turn guidance cuts off information.
+    if (rank > currentRank && (rank === RANK.urgent || currentRank === RANK.normal)) {
+      if (rank === RANK.urgent && this.current.request.instruction) this.interrupted = this.current.request;
       this.interrupt();
       this.play(request);
       return;
     }
-    if (urgent) this.pending.high = request;
+    if (rank === RANK.urgent) this.pending.urgent = request;
+    else if (rank === RANK.high) this.pending.high = request;
     else this.pending.normal = request;
   }
 
@@ -122,6 +135,7 @@ export class SpeechQueue {
   repeat(): boolean {
     if (!this.lastInstruction || this.muted) return false;
     this.pending = {};
+    this.interrupted = undefined;
     if (this.current) this.interrupt();
     this.play({ text: this.lastInstruction, priority: 'high', instruction: true, force: true });
     return true;
@@ -131,6 +145,7 @@ export class SpeechQueue {
     this.muted = muted;
     if (muted) {
       this.pending = {};
+      this.interrupted = undefined;
       if (this.current) this.interrupt();
     }
   }
@@ -138,6 +153,7 @@ export class SpeechQueue {
   /** Drops queued and playing speech (e.g. when guidance becomes unreliable). */
   clear(): void {
     this.pending = {};
+    this.interrupted = undefined;
     if (this.current) this.interrupt();
   }
 
@@ -167,7 +183,7 @@ export class SpeechQueue {
           this.setStatus({ errors: this.status.errors + 1, blocked: this.status.blocked || isBlockedError(error) });
           this.finish(token);
         },
-      }, { urgent: (request.priority ?? 'normal') === 'high' });
+      }, { urgent: rankOf(request) >= RANK.high });
     } catch (error) {
       this.setStatus({ errors: this.status.errors + 1, blocked: isBlockedError(error) });
       this.finish(token);
@@ -216,11 +232,22 @@ export class SpeechQueue {
 
   private takePending(): SpeechRequest | undefined {
     const valid = (request?: SpeechRequest) => Boolean(request && (!request.isCurrent || request.isCurrent()));
-    const { high, normal } = this.pending;
+    const { urgent, high, normal } = this.pending;
+    if (valid(urgent)) {
+      this.pending.urgent = undefined;
+      return urgent;
+    }
+    this.pending.urgent = undefined;
+    // A newer turn instruction replaces the one a hazard cut off.
     if (valid(high)) {
       this.pending.high = undefined;
+      if (high!.instruction) this.interrupted = undefined;
       return high;
     }
+    this.pending.high = undefined;
+    const resumed = this.interrupted;
+    this.interrupted = undefined;
+    if (valid(resumed)) return { ...resumed!, force: true };
     this.pending = {};
     return valid(normal) ? normal : undefined;
   }

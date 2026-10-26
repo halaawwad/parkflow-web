@@ -19,7 +19,7 @@ import {
   type NavigationState,
 } from '@/utils/navigation/session';
 import { markSpoken, planAnnouncement, routeSentences, upcomingSentences } from '@/utils/navigation/voiceScheduler';
-import { SpeechQueue, type SpeechQueueStatus } from '@/utils/navigation/speechQueue';
+import { SpeechQueue, type SpeechPriority, type SpeechQueueStatus } from '@/utils/navigation/speechQueue';
 import { chooseVoice, createNavigationVoice, keepScreenAwake, unlockWebAudio, vibrateFor, type NavigationVoice, type VoiceChoice } from '@/utils/navigation/platform';
 import { useNavigationSessionStore } from '@/store/navigationSessionStore';
 
@@ -131,7 +131,7 @@ export function useTurnByTurnNavigation(locale: Locale) {
 
   /** Speaks (unless muted or backgrounded) and mirrors the message to assistive technology. */
   const say = useCallback(
-    (text: string, options: { priority?: 'normal' | 'high'; instruction?: boolean; isCurrent?: () => boolean } = {}) => {
+    (text: string, options: { priority?: SpeechPriority; instruction?: boolean; isCurrent?: () => boolean } = {}) => {
       setLiveMessage(text);
       if (backgroundRef.current) return;
       queue.enqueue({ text, priority: options.priority, instruction: options.instruction, isCurrent: options.isCurrent });
@@ -427,6 +427,12 @@ export function useTurnByTurnNavigation(locale: Locale) {
     [start],
   );
 
+  /**
+   * Speaks a message from outside guidance (a spoken request, obstacle
+   * awareness) through the guidance queue, so two voices never overlap.
+   */
+  const announce = useCallback((text: string, priority: SpeechPriority = 'normal') => say(text, { priority }), [say]);
+
   /** Following and the full-route overview are exclusive camera modes. */
   const setFollowing = useCallback((next: boolean) => {
     setFollowingState(next);
@@ -452,6 +458,7 @@ export function useTurnByTurnNavigation(locale: Locale) {
     muted,
     setMuted,
     repeat,
+    announce,
     vibration,
     setVibration,
     following,

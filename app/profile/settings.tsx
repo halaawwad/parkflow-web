@@ -60,6 +60,8 @@ export default function SettingsScreen() {
   const setVoiceAlerts = usePreferencesStore((s) => s.setVoiceAlerts);
   const voiceLanguage = usePreferencesStore((s) => s.voiceLanguage);
   const setVoiceLanguage = usePreferencesStore((s) => s.setVoiceLanguage);
+  const accessibleWalking = usePreferencesStore((s) => s.accessibleWalking);
+  const setAccessibleWalking = usePreferencesStore((s) => s.setAccessibleWalking);
   const crashDetection = usePreferencesStore((s) => s.crashDetection);
   const setCrashDetection = usePreferencesStore((s) => s.setCrashDetection);
   const { data: emergencyConfig } = useEmergencyConfig();
@@ -192,6 +194,13 @@ export default function SettingsScreen() {
               ]}
               value={voiceLanguage}
               onChange={setVoiceLanguage}
+            />
+            <Divider style={{ marginVertical: spacing.md }} />
+            <SwitchRow
+              label={t('profile.accessibleWalking')}
+              description={t('profile.accessibleWalkingBody')}
+              value={accessibleWalking}
+              onValueChange={setAccessibleWalking}
             />
           </Card>
         </View>

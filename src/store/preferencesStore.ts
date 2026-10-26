@@ -20,6 +20,8 @@ interface PreferencesState {
   voiceAlerts: boolean;
   /** Language the microphone listens in. Separate from the app language. */
   voiceLanguage: 'ar' | 'en';
+  /** Spoken destinations start walking guidance, with camera obstacle awareness where supported. Chosen by the user, never inferred. */
+  accessibleWalking: boolean;
   /** Watch for crashes while driving and call for help if the driver does not answer. */
   crashDetection: boolean;
   /** Notification and call permissions are asked once, the first time crash detection turns on. */
@@ -34,6 +36,7 @@ interface PreferencesState {
   completeOnboarding: () => void;
   setVoiceAlerts: (enabled: boolean) => void;
   setVoiceLanguage: (language: 'ar' | 'en') => void;
+  setAccessibleWalking: (enabled: boolean) => void;
   setCrashDetection: (enabled: boolean) => void;
   markCrashPermissionsAsked: () => void;
   setHydrated: () => void;
@@ -59,6 +62,7 @@ export const usePreferencesStore = create<PreferencesState>()(
       onboardingComplete: false,
       voiceAlerts: false,
       voiceLanguage: 'ar',
+      accessibleWalking: false,
       crashDetection: true,
       crashPermissionsAsked: false,
       hydrated: false,
@@ -71,6 +75,7 @@ export const usePreferencesStore = create<PreferencesState>()(
       completeOnboarding: () => set({ onboardingComplete: true }),
       setVoiceAlerts: (voiceAlerts) => set({ voiceAlerts }),
       setVoiceLanguage: (voiceLanguage) => set({ voiceLanguage }),
+      setAccessibleWalking: (accessibleWalking) => set({ accessibleWalking }),
       setCrashDetection: (crashDetection) => set({ crashDetection }),
       markCrashPermissionsAsked: () => set({ crashPermissionsAsked: true }),
       setHydrated: () => set({ hydrated: true }),
@@ -109,6 +114,7 @@ export const usePreferencesStore = create<PreferencesState>()(
         onboardingComplete: state.onboardingComplete,
         voiceAlerts: state.voiceAlerts,
         voiceLanguage: state.voiceLanguage,
+        accessibleWalking: state.accessibleWalking,
         crashDetection: state.crashDetection,
         crashPermissionsAsked: state.crashPermissionsAsked,
       }),

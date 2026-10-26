@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import * as Speech from 'expo-speech';
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 import type { Locale } from '@/i18n';
+import { parseVoiceDestination } from '@/utils/navigation/voiceCommand';
 
 /**
  * Voice helpers. Recognition uses the browser speech API on web and the
@@ -138,12 +139,6 @@ export function speak(text: string, locale: Locale): void {
  * Turns a spoken sentence into a place name. "بدي أروح ع شارع ركب" becomes
  * "شارع ركب", because the search matches names, not commands.
  */
-const COMMAND_PREFIX =
-  /^\s*(?:(?:بدي|بدنا|أريد|اريد|أبي|ابي|عايز|عاوز)\s*)?(?:(?:أروح|اروح|نروح|روح|أذهب|اذهب|نذهب|وديني|خذني)\s*)?(?:(?:على|إلى|الى|لـ|ل|ع)\s*)?/u;
-const ENGLISH_PREFIX = /^\s*(?:i want to go to|i want to|take me to|navigate to|go to|drive to|directions to)\s+/i;
-
 export function extractPlaceQuery(transcript: string): string {
-  const trimmed = transcript.trim();
-  const stripped = trimmed.replace(ENGLISH_PREFIX, '').replace(COMMAND_PREFIX, '').trim();
-  return stripped.length >= 2 ? stripped : trimmed;
+  return parseVoiceDestination(transcript)?.query ?? transcript.trim();
 }

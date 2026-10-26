@@ -1,7 +1,7 @@
 import { useCheckpointConnectionStore } from '@/store/checkpointConnectionStore';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, Linking, Platform, View } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 
@@ -58,6 +58,9 @@ import { assessRouteAlternatives } from '@/utils/routeImpact';
 import { haptics } from '@/utils/haptics';
 import { isValidGeoPoint, normalizeGeoPoint, normalizeGeoPoints } from '@/utils/coordinates';
 import { searchPlaces, type PlaceSuggestion } from '@/services/placeSearchService';
+import { chooseSpokenDestination, parseVoiceDestination, voiceWalkPhrases, walkingTarget } from '@/utils/navigation/voiceCommand';
+import { speak } from '@/utils/voice';
+import { usePreferencesStore } from '@/store/preferencesStore';
 import { rankParkingForDestination } from '@/utils/parkingRecommendation';
 import { formatNeedLabels, freeTextNeedCategories, parseTripNeedSemanticText, parseTripNeeds, tripNeedCategoryMatchesTerm, type TripNeedCategory, type TripNeedFreeText, type TripNeedPlace } from '@/utils/tripNeeds';
 import { planRouteWithNeeds, type TripNeedsRoutePlan } from '@/utils/tripNeedsRouting';
@@ -1094,6 +1097,102 @@ export default function MapScreen() {
     });
   }, [activeRouteNeedsPlan, displayedRoute, navigation, routeNeedsDisplayMode, routeTarget, travelMode]);
 
+  // ---- Spoken walking requests ---------------------------------------------
+  // A recognised destination goes straight into walking guidance; the place
+  // still comes from search and the route from the routing engine.
+  const accessibleWalking = usePreferencesStore((s) => s.accessibleWalking);
+  /** A spoken request matched several places; the one the user picks starts the walk. */
+  const voiceWalkPendingRef = useRef(false);
+
+  const startWalkingNavigation = useCallback(
+    async (destination: RouteDestination) => {
+      const started = await startRoute(destination);
+      if (!started || !isValidGeoPoint(destination.location)) return false;
+      haptics.medium();
+      setTravelMode('walking');
+      navTargetRef.current = destination;
+      setRouteDetailsExpanded(false);
+      setEntryMenuOpen(false);
+      navigation.start(walkingTarget(normalizeGeoPoint(destination.location)!, destination.name));
+      const name = locale === 'ar' && destination.type !== 'ev_station' ? destination.nameAr ?? destination.name : destination.name;
+      navigation.announce(voiceWalkPhrases.walkingTo(locale, name));
+      return true;
+    },
+    [locale, navigation, startRoute],
+  );
+
+  const walkToSpokenDestination = useCallback(
+    async (transcript: string) => {
+      voiceWalkPendingRef.current = false;
+      const command = parseVoiceDestination(transcript);
+      if (!command) {
+        speak(voiceWalkPhrases.notUnderstood(locale), locale);
+        return;
+      }
+      const origin = normalizeGeoPoint(testLocation ?? location ?? (await requestLocation()));
+      if (!origin) {
+        setLocationMessage(t('map.locationDeniedBody'));
+        speak(voiceWalkPhrases.noLocation(locale), locale);
+        return;
+      }
+      // "The nearest parking" is answered from ParkFlow's own zones.
+      if (command.parking && command.nearest && zones.length) {
+        const nearest = [...zones].sort((a, b) => distanceMeters(a.location, origin) - distanceMeters(b.location, origin))[0]!;
+        void startWalkingNavigation(parkingDestination(nearest));
+        return;
+      }
+      let results: PlaceSuggestion[];
+      try {
+        results = await searchPlaces(command.query, { center: origin, limit: 5 });
+      } catch {
+        speak(voiceWalkPhrases.searchFailed(locale), locale);
+        return;
+      }
+      const choice = chooseSpokenDestination(command, results, origin);
+      if (choice.kind === 'none') {
+        setDestinationQuery(command.query);
+        speak(voiceWalkPhrases.notFound(locale, command.query), locale);
+        return;
+      }
+      if (choice.kind === 'ambiguous') {
+        // The list is filled by the normal search for this text.
+        setDestinationQuery(command.query);
+        setSuggestionsOpen(true);
+        voiceWalkPendingRef.current = true;
+        speak(voiceWalkPhrases.ambiguous(locale, command.query), locale);
+        return;
+      }
+      selectDestination(choice.place);
+      void startWalkingNavigation(placeDestination(choice.place));
+    },
+    [location, locale, requestLocation, selectDestination, startWalkingNavigation, t, testLocation, zones],
+  );
+
+  const pickDestination = useCallback(
+    (suggestion: PlaceSuggestion) => {
+      selectDestination(suggestion);
+      if (!voiceWalkPendingRef.current) return;
+      voiceWalkPendingRef.current = false;
+      void startWalkingNavigation(placeDestination(suggestion));
+    },
+    [selectDestination, startWalkingNavigation],
+  );
+
+  // parkflow://map?walkTo=… (a Siri Shortcut, a home-screen link): same as saying it.
+  const { walkTo } = useLocalSearchParams<{ walkTo?: string }>();
+  const handledWalkToRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const request = typeof walkTo === 'string' ? walkTo.trim() : '';
+    if (!request) {
+      handledWalkToRef.current = undefined;
+      return;
+    }
+    if (handledWalkToRef.current === request) return;
+    handledWalkToRef.current = request;
+    router.setParams({ walkTo: undefined });
+    void walkToSpokenDestination(request);
+  }, [router, walkTo, walkToSpokenDestination]);
+
   // Android back ends navigation instead of leaving the screen mid-drive.
   useEffect(() => {
     if (!navActive) return;
@@ -1270,8 +1369,12 @@ export default function MapScreen() {
             loading={placeSearchLoading}
             error={placeSearchError}
             showSuggestions={suggestionsOpen && !routeTarget}
-            onChange={changeDestinationQuery}
-            onSelect={selectDestination}
+            onChange={(value) => {
+              voiceWalkPendingRef.current = false;
+              changeDestinationQuery(value);
+            }}
+            onSelect={pickDestination}
+            onVoiceCommand={accessibleWalking ? (transcript) => void walkToSpokenDestination(transcript) : undefined}
           />
         ) : null}
       </View>

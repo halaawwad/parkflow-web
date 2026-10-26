@@ -6,6 +6,7 @@ import { useLocale } from '@/hooks/useLocale';
 import { useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { deliverNativeResult, isVoiceSearchSupported, listenOnceBilingual } from '@/utils/voice';
+import { unlockWebAudio } from '@/utils/navigation/platform';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius } from '@/theme/radius';
 import { shadow } from '@/theme/shadows';
@@ -20,6 +21,8 @@ interface Props {
   showSuggestions: boolean;
   onChange: (value: string) => void;
   onSelect: (suggestion: PlaceSuggestion) => void;
+  /** Accessible walking: a spoken request goes here instead of into the search text. */
+  onVoiceCommand?: (transcript: string) => void;
 }
 
 export function DestinationSearchBox({
@@ -30,6 +33,7 @@ export function DestinationSearchBox({
   showSuggestions,
   onChange,
   onSelect,
+  onVoiceCommand,
 }: Props) {
   const { colors } = useTheme();
   const { t, row, locale } = useLocale();
@@ -54,9 +58,12 @@ export function DestinationSearchBox({
       return;
     }
     setListening(true);
+    // Guidance will speak after the search finishes; browsers only allow sound that a tap started.
+    if (onVoiceCommand) unlockWebAudio();
     cancelRef.current = listenOnceBilingual(voiceLanguage, (transcript) => {
       setListening(false);
-      if (transcript) onChange(transcript);
+      if (onVoiceCommand) onVoiceCommand(transcript);
+      else if (transcript) onChange(transcript);
     });
   };
 
@@ -67,7 +74,7 @@ export function DestinationSearchBox({
       onPress={toggleVoice}
       haptic="light"
       accessibilityRole="button"
-      accessibilityLabel={listening ? t('voice.stop') : t('voice.search')}
+      accessibilityLabel={listening ? t('voice.stop') : onVoiceCommand ? t('voice.walkSearch') : t('voice.search')}
       accessibilityState={{ selected: listening }}
       hitSlop={8}
       style={{

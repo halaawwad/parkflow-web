@@ -180,6 +180,91 @@ describe('speech queue', () => {
   });
 });
 
+describe('hazard warnings in the speech queue', () => {
+  const HAZARD = 'Stop. Obstacle close ahead.';
+
+  it('lets a hazard cut off a turn instruction at once, then says the instruction again', () => {
+    const { engine, queue } = setup();
+    queue.enqueue({ text: 'In 30 meters, turn right.', priority: 'high', instruction: true, isCurrent: () => true });
+    queue.enqueue({ text: HAZARD, priority: 'urgent' });
+    expect(engine.active?.text).toBe(HAZARD);
+    engine.finish();
+    expect(engine.log).toEqual(['In 30 meters, turn right.', HAZARD, 'In 30 meters, turn right.']);
+  });
+
+  it('drops the cut-off instruction once the walker is past that turn', () => {
+    const { engine, queue } = setup();
+    let current = true;
+    queue.enqueue({ text: 'In 30 meters, turn right.', priority: 'high', instruction: true, isCurrent: () => current });
+    queue.enqueue({ text: HAZARD, priority: 'urgent' });
+    current = false;
+    engine.finish();
+    expect(engine.log).toEqual(['In 30 meters, turn right.', HAZARD]);
+    expect(engine.active).toBeUndefined();
+  });
+
+  it('plays a newer turn instruction instead of the one the hazard cut off', () => {
+    const { engine, queue } = setup();
+    queue.enqueue({ text: 'In 30 meters, turn right.', priority: 'high', instruction: true });
+    queue.enqueue({ text: HAZARD, priority: 'urgent' });
+    queue.enqueue({ text: 'Turn right.', priority: 'high', instruction: true });
+    engine.finish();
+    engine.finish();
+    expect(engine.log).toEqual(['In 30 meters, turn right.', HAZARD, 'Turn right.']);
+  });
+
+  it('never overlaps two hazards and keeps the newest waiting one', () => {
+    const { engine, queue } = setup();
+    queue.enqueue({ text: HAZARD, priority: 'urgent' });
+    queue.enqueue({ text: "I can't confirm the way ahead is safe. Stop and check your path.", priority: 'urgent' });
+    expect(engine.log).toEqual([HAZARD]);
+    engine.finish();
+    expect(engine.log[1]).toContain("can't confirm");
+  });
+
+  it('keeps an obstacle-ahead notice behind a playing turn instruction', () => {
+    const { engine, queue } = setup();
+    queue.enqueue({ text: 'Turn left.', priority: 'high', instruction: true });
+    queue.enqueue({ text: 'Careful, obstacle ahead.', priority: 'high' });
+    expect(engine.active?.text).toBe('Turn left.');
+    engine.finish();
+    expect(engine.active?.text).toBe('Careful, obstacle ahead.');
+  });
+
+  it('may repeat a hazard that is still there, but not while it is still playing', () => {
+    const { engine, queue, timers } = setup();
+    queue.enqueue({ text: HAZARD, priority: 'urgent' });
+    queue.enqueue({ text: HAZARD, priority: 'urgent' });
+    engine.finish();
+    expect(engine.log).toEqual([HAZARD]);
+    timers.advance(4_000);
+    queue.enqueue({ text: HAZARD, priority: 'urgent' });
+    expect(engine.log).toEqual([HAZARD, HAZARD]);
+  });
+
+  it('repeat replays the turn instruction, not the hazard', () => {
+    const { engine, queue } = setup();
+    queue.enqueue({ text: 'Turn left.', priority: 'high', instruction: true });
+    engine.finish();
+    queue.enqueue({ text: HAZARD, priority: 'urgent' });
+    engine.finish();
+    expect(queue.repeat()).toBe(true);
+    expect(engine.active?.text).toBe('Turn left.');
+  });
+
+  it('silences hazards and the pending resume when guidance is cleared', () => {
+    const { engine, queue } = setup();
+    queue.enqueue({ text: 'In 30 meters, turn right.', priority: 'high', instruction: true });
+    queue.enqueue({ text: HAZARD, priority: 'urgent' });
+    queue.clear();
+    expect(engine.active).toBeUndefined();
+    queue.enqueue({ text: 'GPS signal lost. Guidance is paused.', priority: 'high' });
+    engine.finish();
+    expect(engine.log.at(-1)).toBe('GPS signal lost. Guidance is paused.');
+    expect(engine.active).toBeUndefined();
+  });
+});
+
 describe('voice scheduling', () => {
   it('scales announcement distances with speed', () => {
     const slow = announcementDistances(3);

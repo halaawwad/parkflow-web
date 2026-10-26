@@ -410,6 +410,12 @@ const categoryForQuery = (query: string): CategoryDefinition | undefined => {
   return CATEGORY_BY_ALIAS.get(normalized);
 };
 
+/** True when the query names a kind of place ("pharmacy") rather than one place. */
+export const isCategoryQuery = (query: string): boolean => Boolean(categoryForQuery(searchableQuery(query)));
+
+/** How well a place name matches a query, 0–1, with the same rules the search ranks by. */
+export const placeNameMatchScore = (query: string, name: string): number => matchScore(searchableQuery(query), name);
+
 const addressOf = (address: Record<string, unknown> | undefined, fallback?: unknown) => {
   const area = [
     address?.road,
