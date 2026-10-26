@@ -107,11 +107,6 @@ export default function WelcomeExperience() {
               <View style={styles.logoPlate}><LogoMark size={82} tone="light" /></View>
             </Animated.View>
 
-            <View style={styles.eyebrow}>
-              <View style={styles.liveDot} />
-              <AppText variant="caption" style={styles.eyebrowText}>RAMALLAH · LIVE PARKING</AppText>
-            </View>
-
             <AppText variant="display" align="center" color="onDeep" style={styles.wordmark}>ParkFlow</AppText>
             <AppText variant="h2" align="center" style={styles.tagline}>{t('brand.tagline')}</AppText>
             {!compact ? <AppText variant="body" align="center" color="onDeepMuted" style={styles.subtitle}>{t('brand.subtitle')}</AppText> : null}
@@ -178,9 +173,6 @@ const styles = StyleSheet.create({
   satellite: { position: 'absolute', width: 7, height: 7, borderRadius: 4, backgroundColor: '#D6A84B', top: 15, right: 12, boxShadow: '0 0 12px rgba(214,168,75,.8)' },
   satelliteSmall: { position: 'absolute', width: 4, height: 4, borderRadius: 2, backgroundColor: '#7DE0B9', bottom: 7, left: 20 },
   logoPlate: { borderRadius: 23, boxShadow: '0 22px 50px rgba(0,0,0,.42)' },
-  eyebrow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 2, borderWidth: 1, borderColor: 'rgba(134,211,181,.18)', borderRadius: 99, paddingHorizontal: 11, paddingVertical: 5, backgroundColor: 'rgba(5,45,34,.58)' },
-  liveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#6EE2B5', boxShadow: '0 0 8px rgba(110,226,181,.8)' },
-  eyebrowText: { color: '#99C9B6', letterSpacing: 1.35, fontSize: 9 },
   wordmark: { marginTop: 12, fontSize: 40, letterSpacing: -1.4, textShadowColor: 'rgba(0,0,0,.35)', textShadowOffset: { width: 0, height: 8 }, textShadowRadius: 18 },
   tagline: { color: '#E2B761', marginTop: 3 },
   subtitle: { maxWidth: 330, marginTop: 7, lineHeight: 23 },
