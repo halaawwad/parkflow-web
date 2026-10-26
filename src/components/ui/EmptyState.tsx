@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 import { AppText } from './AppText';
-import { AppButton } from './AppButton';
+import { AppButton, type ButtonVariant } from './AppButton';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/spacing';
 import { radius } from '@/theme/radius';
@@ -11,7 +11,8 @@ export interface EmptyStateProps {
   icon?: ReactNode;
   title: string;
   body?: string;
-  action?: { label: string; onPress: () => void };
+  /** `variant` quiets the button when the screen already shows the same action as its primary. */
+  action?: { label: string; onPress: () => void; variant?: ButtonVariant };
   secondaryAction?: { label: string; onPress: () => void };
   compact?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -36,7 +37,7 @@ export function EmptyState({
           justifyContent: 'center',
           paddingVertical: compact ? spacing.xxl : spacing.huge,
           paddingHorizontal: spacing.xl,
-          gap: spacing.md,
+          gap: spacing.sm,
         },
         style,
       ]}
@@ -44,9 +45,9 @@ export function EmptyState({
       {icon ? (
         <View
           style={{
-            width: 72,
-            height: 72,
-            borderRadius: radius.xxl,
+            width: 64,
+            height: 64,
+            borderRadius: radius.xl,
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: colors.brandSoft,
@@ -61,12 +62,12 @@ export function EmptyState({
         </View>
       ) : null}
 
-      <AppText variant="h3" align="center">
+      <AppText variant="titleLg" align="center" style={{ marginTop: spacing.xs }}>
         {title}
       </AppText>
 
       {body ? (
-        <AppText variant="body" color="textSecondary" align="center" style={{ maxWidth: 320 }}>
+        <AppText variant="bodySm" color="textSecondary" align="center" style={{ maxWidth: 280 }}>
           {body}
         </AppText>
       ) : null}
@@ -75,6 +76,7 @@ export function EmptyState({
         <AppButton
           label={action.label}
           onPress={action.onPress}
+          variant={action.variant}
           size="md"
           fullWidth={false}
           style={{ alignSelf: 'center', marginTop: spacing.sm, paddingHorizontal: spacing.xxl }}

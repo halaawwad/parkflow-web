@@ -4,14 +4,14 @@
  */
 export const radius = {
   none: 0,
-  xs: 8,
-  sm: 12,
-  md: 14,
-  lg: 16,
-  xl: 22,
-  xxl: 26,
+  xs: 6,
+  sm: 10,
+  md: 12,
+  lg: 14,
+  xl: 18,
+  xxl: 22,
   /** Large floating surfaces over the map: navigation card and trip panel. */
-  xxxl: 30,
+  xxxl: 26,
   pill: 999,
 } as const;
 

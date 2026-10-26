@@ -69,6 +69,8 @@ export function MapLayersSheet({ visible, onClose }: { visible: boolean; onClose
         onValueChange={onChange}
         trackColor={{ false: colors.borderStrong, true: colors.brand }}
         thumbColor={colors.surface}
+        // react-native-web paints an "on" thumb in Material teal unless told otherwise.
+        {...({ activeThumbColor: colors.surface } as object)}
         ios_backgroundColor={colors.borderStrong}
         accessibilityLabel={label}
       />

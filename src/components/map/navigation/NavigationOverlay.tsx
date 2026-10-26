@@ -180,7 +180,14 @@ function ControlButton({
       style={[styles.control, { backgroundColor: background }]}
     >
       {icon}
-      <AppText variant="caption" color={tone === 'danger' ? 'dangerText' : 'text'} numberOfLines={1}>
+      {/* Five controls share one row: a long label (e.g. "إيقاف مؤقت") wraps rather than truncates. */}
+      <AppText
+        variant="caption"
+        align="center"
+        color={tone === 'danger' ? 'dangerText' : 'text'}
+        numberOfLines={2}
+        style={{ fontSize: 11, lineHeight: 13 }}
+      >
         {label}
       </AppText>
     </PressableScale>
@@ -528,16 +535,16 @@ export function NavigationOverlay({
 
 const styles = StyleSheet.create({
   card: { borderRadius: radius.xxxl, overflow: 'hidden' },
-  iconTile: { width: 76, height: 76, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  iconTile: { width: 72, height: 72, borderRadius: radius.xl, alignItems: 'center', justifyContent: 'center' },
   distanceValue: { fontSize: 40, lineHeight: 48 },
   thenStrip: { alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: 10 },
   banner: { alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: 12, borderRadius: radius.lg, minHeight: 48 },
   panel: { borderRadius: radius.xxxl, padding: spacing.lg, gap: spacing.md },
-  control: { flex: 1, minHeight: CONTROL_HEIGHT, borderRadius: 18, alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 2 },
+  control: { flex: 1, minHeight: CONTROL_HEIGHT, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 2, paddingVertical: spacing.sm },
   recenter: { alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.lg, height: 48, borderRadius: radius.pill },
   roundIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   arrivalIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
-  stepIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  stepIcon: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   divider: { width: StyleSheet.hairlineWidth * 2, height: 34 },
   chip: { alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill },
   visuallyHidden: { position: 'absolute', width: 1, height: 1, overflow: 'hidden', opacity: 0.01, left: -10000 },

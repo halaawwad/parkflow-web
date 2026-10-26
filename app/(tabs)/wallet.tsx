@@ -1,4 +1,4 @@
-import { RefreshControl, ScrollView, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -66,7 +66,7 @@ export default function WalletScreen() {
           <RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={colors.brand} />
         }
         contentContainerStyle={{
-          gap: spacing.xl,
+          gap: spacing.lg,
           paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
         }}
       >
@@ -74,19 +74,19 @@ export default function WalletScreen() {
         <DemoPaymentNotice />
 
         {/* ---- Balance card -------------------------------------------- */}
-        <HeroSurface contentStyle={{ gap: spacing.xl }}>
+        <HeroSurface padding="xl" contentStyle={{ gap: spacing.lg }}>
             <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.md }}>
               <View
                 style={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: radius.md,
+                  width: 32,
+                  height: 32,
+                  borderRadius: radius.sm,
                   alignItems: 'center',
                   justifyContent: 'center',
                   backgroundColor: 'rgba(255,255,255,0.12)',
                 }}
               >
-                <WalletIcon size={19} color={colors.accent} strokeWidth={2.2} />
+                <WalletIcon size={16} color={colors.accent} strokeWidth={2.1} />
               </View>
               {/* Low balance is spelled out in the notice under the card. */}
               <AppText variant="label" color="onDeepMuted" style={{ flex: 1 }}>
@@ -115,9 +115,11 @@ export default function WalletScreen() {
                     flex: 1,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    height: 48,
+                    height: 44,
                     borderRadius: radius.md,
-                    backgroundColor: 'rgba(255,255,255,0.12)',
+                    backgroundColor: 'rgba(255,255,255,0.08)',
+                    borderWidth: StyleSheet.hairlineWidth * 2,
+                    borderColor: 'rgba(255,255,255,0.10)',
                   }}
                 >
                   <AppText variant="title" color="onDeep" numeric>
@@ -125,14 +127,27 @@ export default function WalletScreen() {
                   </AppText>
                 </PressableScale>
               ))}
-              <AppButton
-                label={t('wallet.other')}
-                variant="inverse"
-                size="md"
-                fullWidth={false}
+              {/* Same chip family as the amounts; brass marks it as the open-ended one. */}
+              <PressableScale
                 onPress={() => router.push('/wallet/topup')}
-                style={{ height: 48, paddingHorizontal: spacing.lg }}
-              />
+                haptic="light"
+                scaleTo={0.95}
+                accessibilityRole="button"
+                accessibilityLabel={t('wallet.other')}
+                style={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: 44,
+                  paddingHorizontal: spacing.md + 2,
+                  borderRadius: radius.md,
+                  borderWidth: 1,
+                  borderColor: colors.accent,
+                }}
+              >
+                <AppText variant="label" numberOfLines={1} style={{ color: colors.accent }}>
+                  {t('wallet.other')}
+                </AppText>
+              </PressableScale>
             </View>
         </HeroSurface>
 
@@ -186,9 +201,9 @@ export default function WalletScreen() {
               >
                 <View
                   style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: radius.md,
+                    width: 40,
+                    height: 40,
+                    borderRadius: radius.sm,
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: colors.surfaceAlt,
@@ -197,7 +212,7 @@ export default function WalletScreen() {
                   <CreditCard size={20} color={colors.textSecondary} strokeWidth={2.1} />
                 </View>
                 <View style={{ flex: 1, gap: 3 }}>
-                  <AppText variant="titleLg" forceLtrAlign>
+                  <AppText variant="title" forceLtrAlign>
                     {defaultMethod.brand.toUpperCase()} •••• {defaultMethod.last4}
                   </AppText>
                   <AppText variant="bodySm" color="textSecondary" numeric forceLtrAlign>
@@ -220,7 +235,7 @@ export default function WalletScreen() {
               variant="ghost"
               size="sm"
               onPress={() => router.push('/wallet/add-card')}
-              icon={<Plus size={16} color={colors.brand} strokeWidth={2.4} />}
+              icon={<Plus size={16} color={colors.textSecondary} strokeWidth={2.4} />}
               style={{ alignSelf: alignStart }}
               fullWidth={false}
             />

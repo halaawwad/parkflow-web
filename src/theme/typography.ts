@@ -68,22 +68,26 @@ type VariantStyle = Pick<TextStyle, 'fontSize' | 'lineHeight' | 'letterSpacing' 
 };
 
 export const typography: Record<TypographyVariant, VariantStyle> = {
+  /**
+   * A deliberately restrained scale: hierarchy comes from weight, colour and
+   * space as much as size, so titles never crowd the content they introduce.
+   */
   /** The active-parking timer. Tabular figures are applied by AppText. */
-  displayXl: { fontSize: 48, lineHeight: 60, letterSpacing: -1, weight: 'semibold' },
-  display: { fontSize: 38, lineHeight: 48, letterSpacing: -1, weight: 'bold' },
-  h1: { fontSize: 30, lineHeight: 40, letterSpacing: -0.8, weight: 'bold' },
-  h2: { fontSize: 23, lineHeight: 32, letterSpacing: -0.5, weight: 'bold' },
-  h3: { fontSize: 18, lineHeight: 26, letterSpacing: -0.2, weight: 'semibold' },
-  titleLg: { fontSize: 17, lineHeight: 24, letterSpacing: -0.25, weight: 'bold' },
+  displayXl: { fontSize: 44, lineHeight: 52, letterSpacing: -1.2, weight: 'semibold' },
+  display: { fontSize: 32, lineHeight: 40, letterSpacing: -0.9, weight: 'semibold' },
+  h1: { fontSize: 26, lineHeight: 34, letterSpacing: -0.6, weight: 'bold' },
+  h2: { fontSize: 20, lineHeight: 28, letterSpacing: -0.35, weight: 'semibold' },
+  h3: { fontSize: 17, lineHeight: 24, letterSpacing: -0.2, weight: 'semibold' },
+  titleLg: { fontSize: 16, lineHeight: 22, letterSpacing: -0.15, weight: 'semibold' },
   title: { fontSize: 15, lineHeight: 21, letterSpacing: -0.1, weight: 'semibold' },
   bodyLg: { fontSize: 16, lineHeight: 24, weight: 'regular' },
   body: { fontSize: 15, lineHeight: 22, weight: 'regular' },
-  bodySm: { fontSize: 13, lineHeight: 20, weight: 'regular' },
+  bodySm: { fontSize: 13, lineHeight: 19, weight: 'regular' },
   label: { fontSize: 13, lineHeight: 18, letterSpacing: -0.05, weight: 'semibold' },
-  caption: { fontSize: 12, lineHeight: 18, weight: 'medium' },
-  overline: { fontSize: 11, lineHeight: 15, letterSpacing: 1.1, textTransform: 'uppercase', weight: 'bold' },
-  button: { fontSize: 16, lineHeight: 24, letterSpacing: -0.1, weight: 'semibold' },
-  buttonSm: { fontSize: 14, lineHeight: 20, letterSpacing: 0, weight: 'semibold' },
+  caption: { fontSize: 12, lineHeight: 16, letterSpacing: 0.05, weight: 'medium' },
+  overline: { fontSize: 11, lineHeight: 14, letterSpacing: 1.2, textTransform: 'uppercase', weight: 'semibold' },
+  button: { fontSize: 15, lineHeight: 22, letterSpacing: -0.1, weight: 'semibold' },
+  buttonSm: { fontSize: 14, lineHeight: 20, letterSpacing: -0.05, weight: 'semibold' },
 };
 
 /** Caps text growth so premium layouts survive large accessibility text sizes. */

@@ -39,7 +39,7 @@ export function SwitchRow({
     >
       {/* Only the control dims when disabled: the text often explains why, so it must stay readable. */}
       <View style={{ flex: 1, gap: 2 }}>
-        <AppText variant="titleLg" color={disabled ? 'textSecondary' : 'text'}>{label}</AppText>
+        <AppText variant="title" color={disabled ? 'textSecondary' : 'text'}>{label}</AppText>
         {description ? (
           <AppText variant="bodySm" color="textSecondary">
             {description}
@@ -55,6 +55,8 @@ export function SwitchRow({
         }}
         trackColor={{ false: colors.borderStrong, true: colors.brand }}
         thumbColor={colors.surface}
+        // react-native-web paints an "on" thumb in Material teal unless told otherwise.
+        {...({ activeThumbColor: colors.surface } as object)}
         ios_backgroundColor={colors.borderStrong}
         accessibilityLabel={label}
         accessibilityState={{ checked: value, disabled }}

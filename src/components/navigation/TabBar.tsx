@@ -1,4 +1,4 @@
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View, useWindowDimensions } from 'react-native';
 import type { BottomTabBarProps } from 'expo-router/build/react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
@@ -38,10 +38,13 @@ const LABELS: Record<string, TranslationKey> = {
 function TabItem({
   routeName,
   focused,
+  compact,
   onPress,
 }: {
   routeName: string;
   focused: boolean;
+  /** Narrow phones: six labels only fit when the type steps down a size. */
+  compact: boolean;
   onPress: () => void;
 }) {
   const { colors } = useTheme();
@@ -99,20 +102,22 @@ function TabItem({
         />
         <Animated.View style={iconStyle}>
           <Icon
-            size={21}
+            size={20}
             color={focused ? colors.brand : colors.textTertiary}
-            strokeWidth={focused ? 2.5 : 2}
+            strokeWidth={focused ? 2.3 : 1.9}
           />
         </Animated.View>
       </View>
 
       <AppText
         variant="caption"
-        weight={focused ? 'bold' : 'medium'}
+        weight={focused ? 'semibold' : 'medium'}
         numberOfLines={1}
         style={{
           color: focused ? colors.brand : colors.textTertiary,
-          fontSize: 12,
+          fontSize: compact ? 10 : 11,
+          lineHeight: 14,
+          letterSpacing: compact ? -0.1 : 0,
         }}
       >
         {labelKey ? t(labelKey) : routeName}
@@ -129,6 +134,8 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
   const { colors } = useTheme();
   const { row } = useLocale();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const compact = width < 360;
   // Turn-by-turn navigation owns the whole screen.
   const navigating = useNavigationSessionStore((s) => s.active);
   if (navigating) return null;
@@ -140,7 +147,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
         left: 0,
         right: 0,
         bottom: 0,
-        paddingHorizontal: screenPadding,
+        paddingHorizontal: compact ? spacing.md : screenPadding,
         paddingBottom: Math.max(insets.bottom, spacing.md),
       }}
       pointerEvents="box-none"
@@ -159,7 +166,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
           },
           // Frosted over the map and lists on web; native keeps the near-opaque glass colour.
           Platform.OS === 'web' ? ({ backdropFilter: 'blur(18px) saturate(1.4)' } as object) : null,
-          shadow.lg,
+          shadow.md,
         ]}
       >
         {state.routes.map((route, index) => {
@@ -177,7 +184,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
           };
 
           return (
-            <TabItem key={route.key} routeName={route.name} focused={focused} onPress={onPress} />
+            <TabItem key={route.key} routeName={route.name} focused={focused} compact={compact} onPress={onPress} />
           );
         })}
       </View>

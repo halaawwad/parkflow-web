@@ -24,6 +24,8 @@ function useWebPolish(brand: string, focusRing: string) {
       :focus { outline: none; }
       :focus-visible { outline: 2.5px solid ${focusRing} !important; outline-offset: 2px !important; }
       input:focus-visible, textarea:focus-visible { outline-offset: 0 !important; }
+      /* Fields that draw their own focus border and halo: a second square ring would clash with it. */
+      [data-ownfocus]:focus-visible { outline: none !important; }
       * { scrollbar-width: thin; scrollbar-color: ${brand}40 transparent; }
       *::-webkit-scrollbar { width: 8px; height: 8px; }
       *::-webkit-scrollbar-thumb { background: ${brand}40; border-radius: 8px; }

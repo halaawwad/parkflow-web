@@ -34,7 +34,7 @@ export interface AppButtonProps {
   testID?: string;
 }
 
-const heights: Record<ButtonSize, number> = { lg: 56, md: 48, sm: 44 };
+const heights: Record<ButtonSize, number> = { lg: 52, md: 46, sm: 44 };
 const paddings: Record<ButtonSize, number> = { lg: spacing.xxl, md: spacing.xl, sm: spacing.lg };
 
 export function AppButton({
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
   base: {
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     gap: spacing.sm,
   },
   icon: {

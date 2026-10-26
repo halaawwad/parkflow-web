@@ -49,7 +49,7 @@ export function ListItem({
           flexDirection: row,
           alignItems: 'center',
           gap: spacing.md,
-          paddingVertical: spacing.lg,
+          paddingVertical: spacing.md + 2,
           paddingHorizontal: tone === 'card' ? spacing.lg : 0,
           borderRadius: tone === 'card' ? radius.lg : 0,
           backgroundColor: tone === 'card' ? colors.surface : 'transparent',
@@ -63,18 +63,18 @@ export function ListItem({
     >
       {leading}
 
-      <View style={{ flex: 1, gap: spacing.xs }}>
-        <AppText variant="titleLg" color={destructive ? 'danger' : 'text'} numberOfLines={1}>
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <AppText variant="title" weight="medium" color={destructive ? 'danger' : 'text'} numberOfLines={1}>
           {title}
         </AppText>
         {subtitle ? (
-          <AppText variant="bodySm" color="textSecondary" numberOfLines={2}>
+          <AppText variant="caption" color="textTertiary" numberOfLines={2}>
             {subtitle}
           </AppText>
         ) : null}
       </View>
 
-      {trailing ?? (showChevron ? <Chevron size={20} color={colors.textTertiary} /> : null)}
+      {trailing ?? (showChevron ? <Chevron size={18} color={colors.placeholder} strokeWidth={2.2} /> : null)}
     </View>
   );
 

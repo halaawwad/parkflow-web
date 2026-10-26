@@ -97,7 +97,7 @@ export function Segmented<T extends string>({
             padding: 4,
             gap: 4,
             borderRadius: radius.md,
-            backgroundColor: colors.surfaceAlt,
+            backgroundColor: colors.track,
           },
           style,
         ]}

@@ -11,7 +11,7 @@ export function RoadReportLocationPanel({ onCancel, onContinue }: { onCancel: ()
   const { colors } = useTheme();
   const { t, row } = useLocale();
   return (
-    <View style={[{ backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.lg, gap: spacing.md }, shadow.lg]}>
+    <View style={[{ backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.lg, gap: spacing.md, marginHorizontal: spacing.sm, marginBottom: spacing.md }, shadow.lg]}>
       <View style={{ gap: spacing.xs }}>
         <AppText variant="h3">{t('roadReports.locationTitle')}</AppText>
         <AppText variant="caption" color="textSecondary">{t('roadReports.locationHelp')}</AppText>

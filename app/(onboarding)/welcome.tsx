@@ -11,7 +11,6 @@ import { LogoMark } from '@/components/brand/Logo';
 import { useTheme } from '@/theme/ThemeProvider';
 import { darkColors } from '@/theme/colors';
 import { spacing, screenPadding } from '@/theme/spacing';
-import { radius } from '@/theme/radius';
 import { useLocale } from '@/hooks/useLocale';
 import { services } from '@/services';
 import { useAuthStore } from '@/store/authStore';
@@ -94,25 +93,25 @@ export default function WelcomeScreen() {
           }}
         >
           <Reveal delay={80} style={{ alignItems: 'center' }}>
-            <LogoMark size={92} tone="light" />
+            <LogoMark size={80} tone="light" />
           </Reveal>
 
-          <Reveal delay={180} style={{ marginTop: spacing.xxxl, gap: spacing.md }}>
+          <Reveal delay={180} style={{ marginTop: spacing.xxl, gap: spacing.sm }}>
             <AppText variant="display" align="center" color="onDeep">
               {t('brand.name')}
             </AppText>
             <AppText
-              variant="h2"
+              variant="h3"
               align="center"
-              style={{ color: colors.accent, letterSpacing: -0.2 }}
+              style={{ color: colors.accent, marginTop: spacing.xs }}
             >
               {t('brand.tagline')}
             </AppText>
             <AppText
-              variant="bodyLg"
+              variant="body"
               align="center"
               color="onDeepMuted"
-              style={{ maxWidth: 320, alignSelf: 'center' }}
+              style={{ maxWidth: 300, alignSelf: 'center' }}
             >
               {t('brand.subtitle')}
             </AppText>
@@ -120,7 +119,8 @@ export default function WelcomeScreen() {
 
           <View style={{ flex: 1 }} />
 
-          <Reveal delay={300} style={{ gap: spacing.sm, marginBottom: spacing.xxl }}>
+          {/* An itinerary, not a set of inputs: numbered stops on hairlines. */}
+          <Reveal delay={300} style={{ marginBottom: spacing.xxl }}>
             {features.map(({ Icon, label }, index) => (
               <View
                 key={label}
@@ -128,34 +128,19 @@ export default function WelcomeScreen() {
                   flexDirection: row,
                   alignItems: 'center',
                   gap: spacing.md,
-                  paddingVertical: spacing.sm,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.lg,
-                  // Frosted glass over the deep stage.
-                  backgroundColor: 'rgba(255,255,255,0.06)',
-                  borderWidth: StyleSheet.hairlineWidth * 2,
-                  borderColor: 'rgba(255,255,255,0.10)',
-                  ...(Platform.OS === 'web' ? ({ backdropFilter: 'blur(12px)' } as object) : null),
+                  paddingVertical: spacing.md + 2,
+                  borderTopWidth: StyleSheet.hairlineWidth * 2,
+                  borderColor: 'rgba(255,255,255,0.09)',
+                  ...(index === features.length - 1 ? { borderBottomWidth: StyleSheet.hairlineWidth * 2 } : null),
                 }}
               >
-                <View
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: radius.sm,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: 'rgba(255,255,255,0.10)',
-                  }}
-                >
-                  <Icon size={16} color={colors.accent} strokeWidth={2.2} />
-                </View>
-                <AppText variant="title" color="onDeep" style={{ flex: 1 }}>
-                  {label}
-                </AppText>
-                <AppText variant="caption" color="onDeepMuted" numeric>
+                <AppText variant="caption" numeric style={{ color: colors.accent, width: 20 }}>
                   {String(index + 1).padStart(2, '0')}
                 </AppText>
+                <AppText variant="title" weight="medium" color="onDeep" style={{ flex: 1 }}>
+                  {label}
+                </AppText>
+                <Icon size={17} color="rgba(255,255,255,0.55)" strokeWidth={1.9} />
               </View>
             ))}
           </Reveal>

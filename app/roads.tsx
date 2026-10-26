@@ -98,7 +98,7 @@ export default function RoadAlertsScreen() {
                         >
                           <CheckpointIcon status={displayStatus} color={color} size={18} />
                         </View>
-                        <View style={{ flex: 1, gap: 2 }}>
+                        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                           <AppText variant="title" numberOfLines={1}>
                             {nameOf(checkpoint)}
                           </AppText>
@@ -111,11 +111,22 @@ export default function RoadAlertsScreen() {
                                   count: checkpoint.reportCount,
                                 })}
                           </AppText>
-                          {(checkpoint.directions ?? []).map(passage => (
-                            <AppText key={passage.id} variant="caption" style={{ color: checkpointColor(passage.status, checkpoint.assumed, colors) }}>
-                              {t(passage.id === 'entrance' ? 'roads.entrance' : 'roads.exit')}: {t(`roads.status.${passage.status}`)}
-                            </AppText>
-                          ))}
+                          {/* Entry and exit share one line, each led by its own status dot. */}
+                          {checkpoint.directions?.length ? (
+                            <View style={{ flexDirection: row, flexWrap: 'wrap', alignItems: 'center', columnGap: spacing.md, rowGap: 2, marginTop: 2 }}>
+                              {checkpoint.directions.map(passage => {
+                                const passageColor = checkpointColor(passage.status, checkpoint.assumed, colors);
+                                return (
+                                  <View key={passage.id} style={{ flexDirection: row, alignItems: 'center', gap: 5 }}>
+                                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: passageColor }} />
+                                    <AppText variant="caption" style={{ color: passageColor }}>
+                                      {t(passage.id === 'entrance' ? 'roads.entrance' : 'roads.exit')}: {t(`roads.status.${passage.status}`)}
+                                    </AppText>
+                                  </View>
+                                );
+                              })}
+                            </View>
+                          ) : null}
                         </View>
                         {/* Unreported checkpoints already say so in the line above. */}
                         {checkpoint.assumed ? null : (

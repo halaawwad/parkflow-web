@@ -73,6 +73,8 @@ export type ColorScheme = {
   surface: string;
   surfaceAlt: string;
   surfaceSunken: string;
+  /** Recessed track behind segmented controls: visible on every background. */
+  track: string;
   surfaceInverse: string;
   overlay: string;
   scrim: string;
@@ -137,6 +139,7 @@ export const lightColors: ColorScheme = {
   surface: palette.white,
   surfaceAlt: palette.neutral100,
   surfaceSunken: '#EDEBE4',
+  track: 'rgba(19,33,29,0.06)',
   surfaceInverse: palette.emerald900,
   overlay: 'rgba(7,24,19,0.48)',
   scrim: 'rgba(7,24,19,0.06)',
@@ -197,6 +200,7 @@ export const darkColors: ColorScheme = {
   surface: '#14211D',
   surfaceAlt: '#1B2B26',
   surfaceSunken: '#101C18',
+  track: 'rgba(255,255,255,0.06)',
   surfaceInverse: palette.white,
   overlay: 'rgba(0,0,0,0.62)',
   scrim: 'rgba(255,255,255,0.05)',
