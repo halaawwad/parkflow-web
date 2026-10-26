@@ -47,7 +47,8 @@ describe('navigation voice', () => {
     const body = JSON.parse(init.body);
     expect(body.generationConfig.responseModalities).toEqual(['AUDIO']);
     expect(body.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName).toBe(env.GEMINI_TTS_VOICE);
-    expect(body.contents[0].parts[0].text).toContain('انعطف يمينًا.');
+    // Exactly the sentence: the model speaks every word it is sent.
+    expect(body.contents[0].parts[0].text).toBe('انعطف يمينًا.');
 
     expect(first.mimeType).toBe('audio/wav');
     const wav = Buffer.from(first.audio, 'base64');
