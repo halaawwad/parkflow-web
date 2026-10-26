@@ -19,11 +19,12 @@ export type VoiceLocale = 'ar' | 'en';
 const CACHE_LIMIT = 200;
 const TIMEOUT_MS = 12_000;
 
-/** Style direction for the model. It shapes delivery and is not read aloud. */
-const STYLE: Record<VoiceLocale, string> = {
-  ar: 'Read the following Arabic navigation instruction in clear, natural Modern Standard Arabic, calm and confident like an in-car navigation assistant, at a steady pace:',
-  en: 'Read the following navigation instruction clearly and naturally, calm and confident like an in-car navigation assistant, at a steady pace:',
-};
+/*
+ * Only the sentence itself is sent. Gemini 3.8 TTS reads every word of its
+ * input aloud, so a style preamble ("Read the following… calm and confident")
+ * was spoken before each instruction: about 15 s of English and Arabic per
+ * prompt. The prebuilt voice already carries a calm delivery.
+ */
 
 interface SpokenAudio {
   mimeType: 'audio/wav';
@@ -70,7 +71,7 @@ const apiKey = () => env.GEMINI_TTS_API_KEY || env.GEMINI_API_KEY;
 
 const rateOf = (mimeType: string) => Number(/rate=(\d+)/.exec(mimeType)?.[1] ?? 24000);
 
-async function synthesize(text: string, locale: VoiceLocale): Promise<SpokenAudio> {
+async function synthesize(text: string): Promise<SpokenAudio> {
   let raw: unknown;
   try {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_TTS_MODEL}:generateContent`, {
@@ -78,7 +79,7 @@ async function synthesize(text: string, locale: VoiceLocale): Promise<SpokenAudi
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey()! },
       signal: AbortSignal.timeout(TIMEOUT_MS),
       body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: `${STYLE[locale]}\n${text}` }] }],
+        contents: [{ role: 'user', parts: [{ text }] }],
         generationConfig: {
           responseModalities: ['AUDIO'],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: env.GEMINI_TTS_VOICE } } },
@@ -123,7 +124,7 @@ export async function speak(text: string, locale: VoiceLocale): Promise<SpokenAu
   const pending = inFlight.get(key);
   if (pending) return pending;
 
-  const request = synthesize(text, locale)
+  const request = synthesize(text)
     .then((result) => {
       cache.set(key, result);
       if (cache.size > CACHE_LIMIT) cache.delete(cache.keys().next().value!);
