@@ -1363,6 +1363,7 @@ export default function MapScreen() {
           />
         </Reveal>
         {!reportLocationPicking && !reportStep && !selectedReport ? (
+          <Reveal offset={8} delay={40}>
           <DestinationSearchBox
             value={destinationQuery}
             suggestions={placeSuggestions}
@@ -1376,6 +1377,7 @@ export default function MapScreen() {
             onSelect={pickDestination}
             onVoiceCommand={accessibleWalking ? (transcript) => void walkToSpokenDestination(transcript) : undefined}
           />
+          </Reveal>
         ) : null}
       </View>
 
